@@ -24,8 +24,8 @@ jobs:
           test -n "$SDKMGR"
           echo "$(dirname "$SDKMGR")" >> "$GITHUB_PATH"
           "$SDKMGR" --version
-      - name: Install Android API 35
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Install Android API 36
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -40,7 +40,7 @@ jobs:
       - name: Publish test APKs
         uses: actions/upload-artifact@v4
         with:
-          name: BlendCraft-1.3-free-test-apks-and-play-aab
+          name: BlendCraft-vc5-API36-builds
           path: |
             app/build/outputs/apk/play/debug/app-play-debug.apk
             app/build/outputs/apk/snoplay/debug/app-snoplay-debug.apk
