@@ -1,5 +1,14 @@
 # BlendCraft owner release and Premium architecture
 
+## Permanent BlendCraft signing identity (created 2026-10-16)
+The owner has a 3072-bit RSA private signing key in a password-encrypted PKCS#12 backup named `BlendCraft-SnoPlay-permanent-signing-key.p12` (held privately by the owner, **never in Git**). The key entry alias is `blendcraft-release`; Android signing certificate SHA-256 fingerprint:
+
+`E1:03:D0:0D:6B:C8:09:00:22:9B:B4:31:78:3A:E0:E2:08:A8:CC:26:11:67:63:06:82:3A:F9:82:71:A8:AE:6C`
+
+Use the **same exact PKCS#12 file**, not a newly generated file, for every subsequent release. The owner-selected phrase protects the keystore: it is **not** the actual cryptographic signing certificate, and it must never be committed to source control. A new key with the same password will not update the old app. Early debug-signed APKs may need to be replaced **once**; thereafter the same package name, signing cert, and incremented versionCode enable install-over-the-top updates.
+
+The 1.3.0 SnoPlay and Play test APKs were re-signed with this certificate, with Android APK Signature Scheme v2 RSA/SHA-256 and local signature/content checks; these were **not** installed or tested on a physical device.
+
 ## Owner-only software updates
 Android does **not** accept an arbitrary text password as proof of a legitimate software update.
 Updates must be signed by the **same signing certificate** as the installed application.
@@ -14,8 +23,7 @@ keystore and passwords exclusively in **GitHub Actions encrypted secrets**:
 - `BLENDCRAFT_KEY_PASSWORD` — key password.
 
 Never put any of those values, a human passkey, PayPal client secret, or
-an admin password into an APK or a public repository. The older passkey posted
-in chat is **not** used for release signing and should not be reused as a secret.
+an admin password into an APK or a public repository. Never hardcode any owner password or passphrase in the app, documentation, a commit, or build logs. Use GitHub protected secrets for production signing.
 
 This workflow has not yet run as a signed production release: the requisite
 secrets and a protected deployment environment are not currently configured.
