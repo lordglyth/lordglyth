@@ -357,83 +357,216 @@ public class MainActivity extends Activity {
         root.requestApplyInsets();
     }
 
+    // BlendCraft Studio v1.1: a persistent, accessible inspector replaces hidden sideways tools.
+    private int inspectorTab = 0; // TEXT / TUNE / FRAME / DRAW
+    private static final int MUTED = 0xFFA6AFCE;
+    private static final int LAVENDER = 0xFFBD9FFF;
+    private static final int BORDER = 0xFF3D4568;
+
+    private android.graphics.drawable.GradientDrawable gradient(int start,int end,int radius) {
+        android.graphics.drawable.GradientDrawable d =
+            new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,new int[]{start,end});
+        d.setCornerRadius(dp(radius));
+        return d;
+    }
+    private android.graphics.drawable.GradientDrawable outlined(int background,int border,int radius) {
+        android.graphics.drawable.GradientDrawable d=box(background,radius);
+        d.setStroke(dp(1),border);
+        return d;
+    }
+    private Button actionButton(String label,Runnable action,boolean primary) {
+        Button b=button(label,action);
+        b.setTextSize(14);b.setTypeface(null,1);
+        b.setTextColor(primary?BG:WHITE);
+        b.setBackground(primary?gradient(0xFF91F1EB,0xFF86C5F4,17):outlined(0xFF262B49,0xFF434F77,17));
+        b.setElevation(dp(primary?4:1));
+        return b;
+    }
+    private TextView kicker(String value) {
+        TextView t=text(value,10,MUTED,true);
+        t.setLetterSpacing(.14f);
+        return t;
+    }
+    private void addFlexButton(LinearLayout row,String label,Runnable action,boolean primary){
+        Button b=actionButton(label,action,primary);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(43),1);
+        lp.setMargins(dp(3),0,dp(3),0);
+        row.addView(b,lp);
+    }
+    private EditText captionInput(String value,String hint,java.util.function.Consumer<String> update) {
+        EditText e=new EditText(this);
+        e.setSingleLine(true);e.setTextSize(15);e.setTextColor(WHITE);e.setHintTextColor(0xFF8791B2);
+        e.setSelectAllOnFocus(false);
+        e.setPadding(dp(12),0,dp(12),0);
+        e.setBackground(outlined(0xFF13192E,0xFF454E74,12));
+        e.setHint(hint);
+        e.setText(value);
+        e.setOnFocusChangeListener((v,focus)->{ if(focus)push(); });
+        e.addTextChangedListener(new android.text.TextWatcher(){
+            public void beforeTextChanged(CharSequence s,int st,int cnt,int after){}
+            public void onTextChanged(CharSequence s,int st,int before,int cnt){
+                update.accept(s.toString());
+                if(preview!=null)preview.invalidate();
+            }
+            public void afterTextChanged(android.text.Editable ed){}
+        });
+        return e;
+    }
+    private void addCaptionField(LinearLayout r,String title,String value,String hint,java.util.function.Consumer<String> listener){
+        LinearLayout item=column();
+        item.addView(kicker(title));
+        gap(item,6);
+        EditText input=captionInput(value,hint,listener);
+        item.addView(input,new LinearLayout.LayoutParams(-1,dp(44)));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);
+        lp.setMargins(dp(3),0,dp(3),0);r.addView(item,lp);
+    }
+    private void addTune(LinearLayout parent,String label,int value,java.util.function.IntConsumer update){
+        LinearLayout block=row();
+        TextView t=text(label,12,MUTED,true);
+        block.addView(t,new LinearLayout.LayoutParams(dp(84),dp(28)));
+        SeekBar slider=new SeekBar(this); slider.setMax(200);slider.setProgress(value);
+        slider.setProgressTintList(android.content.res.ColorStateList.valueOf(CYAN));
+        slider.setThumbTintList(android.content.res.ColorStateList.valueOf(CYAN));
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar s,int n,boolean fromUser){
+                if(fromUser){update.accept(n);if(preview!=null)preview.invalidate();}
+            }
+            public void onStartTrackingTouch(SeekBar s){push();}
+            public void onStopTrackingTouch(SeekBar s){}
+        });
+        block.addView(slider,new LinearLayout.LayoutParams(0,dp(35),1));
+        parent.addView(block);
+    }
+    private void openTab(int tab) {
+        inspectorTab=tab;
+        // Leave keyboard focus naturally before rebuilding inspector.
+        showStudio();
+    }
     private void showStudio() {
         if(source==null){showHome();return;}
-        LinearLayout root=column();root.setBackgroundColor(BG);
-        LinearLayout top=row();top.setPadding(dp(10),dp(10),dp(10),dp(7));
-        Button back=button("‹ Home",()->showHome());
-        top.addView(back);
-        TextView title=text("  "+mode+" Studio",18,WHITE,true);
-        top.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));
-        Button save=button("Save ↓",()->save(false));
-        save.setBackground(box(0xFF426E82,14));top.addView(save);
-        root.addView(top);
-        LinearLayout switcher=row();switcher.setPadding(dp(10),0,dp(10),dp(5));
+        LinearLayout root=column();root.setBackgroundColor(0xFF0B0E20);
+
+        LinearLayout head=row();head.setPadding(dp(13),dp(8),dp(13),dp(5));
+        Button back=actionButton("‹",()->showHome(),false);back.setTextSize(24);
+        head.addView(back,new LinearLayout.LayoutParams(dp(45),dp(46)));
+        LinearLayout heading=column(); heading.setPadding(dp(12),0,0,0);
+        heading.addView(kicker("BLENDCRAFT  /  STUDIO"));
+        gap(heading,3);
+        heading.addView(text(mode.equals("Meme")?"Meme Maker":mode.equals("Screenshot")?"Screen Studio":"Photo Lab",22,WHITE,true));
+        head.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
+        Button save=actionButton("SAVE  ↗",()->save(false),true);
+        head.addView(save,new LinearLayout.LayoutParams(dp(94),dp(46)));
+        root.addView(head);
+        LinearLayout switches=row();switches.setPadding(dp(12),dp(7),dp(12),dp(5));
         for(String m:new String[]{"Photo","Screenshot","Meme"}){
-            Button b=button(m,()->setNewMode(m));
-            b.setTextSize(12);
-            if(mode.equals(m)){b.setTextColor(BG);b.setBackground(box(CYAN,14));}
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(42),1);
-            lp.setMargins(dp(3),0,dp(3),0);switcher.addView(b,lp);
+            final boolean selected=mode.equals(m);
+            Button b=button(selected?"● "+m:m,()->setNewMode(m));
+            b.setTextSize(12);b.setTextColor(selected?BG:MUTED);
+            b.setBackground(selected?gradient(0xFFA3EFEF,0xFF93B9FC,14):outlined(0xFF1B2039,0xFF323C5A,14));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(37),1);
+            lp.setMargins(dp(3),0,dp(3),0);
+            switches.addView(b,lp);
         }
-        root.addView(switcher);
-        // Primary text tools must not be buried inside the scrolling toolbar.
-        LinearLayout textActions=row();
-        textActions.setPadding(dp(10),dp(2),dp(10),dp(8));
-        Button editCaptions=button("✎ Edit meme captions",()->captionDialog());
-        editCaptions.setBackground(box(CYAN,14));
-        editCaptions.setTextColor(BG);
-        editCaptions.setTextSize(14);
-        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,dp(49),1);
-        cp.setMargins(dp(3),0,dp(3),0);
-        textActions.addView(editCaptions,cp);
-        Button addText=button("＋ Add text",()->textPrompt("Add text or emoji",state.extra,s->{state.extra=s;}));
-        addText.setTextSize(14);
-        LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(0,dp(49),1);
-        ap.setMargins(dp(3),0,dp(3),0);
-        textActions.addView(addText,ap);
-        root.addView(textActions);
+        root.addView(switches);
+
         FrameLayout canvasHolder=new FrameLayout(this);
-        canvasHolder.setBackgroundColor(0xFF171B32);
+        canvasHolder.setBackgroundColor(0xFF101429);
         preview=new Preview();
         canvasHolder.addView(preview,new FrameLayout.LayoutParams(-1,-1));
         root.addView(canvasHolder,new LinearLayout.LayoutParams(-1,0,1));
-        TextView tip=text(drawing?"DRAW MODE · Drag to annotate":"Tap artwork to move your watermark",11,0xFFCAD6EA,false);
-        tip.setGravity(Gravity.CENTER);tip.setPadding(0,dp(7),0,dp(5));
-        root.addView(tip);
-        HorizontalScrollView sc=new HorizontalScrollView(this);sc.setHorizontalScrollBarEnabled(false);
-        LinearLayout bar=row();bar.setPadding(dp(8),dp(5),dp(8),dp(5));
-        addTool(bar,"↶ Undo",()->undoAction());
-        addTool(bar,"↷ Redo",()->redoAction());
-        addTool(bar,"Crop "+RATIOS[state.ratio],()->{push();state.ratio=(state.ratio+1)%RATIOS.length;showStudio();});
-        addTool(bar,"Rotate ↻",()->{push();state.rotation=(state.rotation+90)%360;rotatedCache=null;showStudio();});
-        addTool(bar,"Adjust ◐",()->filters());
-        addTool(bar,"Captions",()->captionDialog());
-        addTool(bar,"Add text",()->textPrompt("Text or emoji",state.extra,s->{state.extra=s;}));
-        addTool(bar,"Text color",()->{push();state.textColor=state.textColor==Color.WHITE?0xFFFCE269:state.textColor==0xFFFCE269?CYAN:Color.WHITE;showStudio();});
-        addTool(bar,drawing?"✓ Draw on":"✎ Draw",()->{drawing=!drawing;showStudio();});
-        addTool(bar,"Ink",()->{inkIndex=(inkIndex+1)%INKS.length;toast("Ink color changed");});
-        addTool(bar,"Clear ink",()->{push();state.strokes.clear();showStudio();});
-        addTool(bar,"Frame ✦",()->{push();state.frame=(state.frame+1)%4;mode="Screenshot";showStudio();});
-        addTool(bar,"Watermark",()->watermarkDialog());
-        addTool(bar,"New photo",()->pick(mode));
-        sc.addView(bar);root.addView(sc);
-        LinearLayout actions=row();actions.setPadding(dp(10),dp(4),dp(10),dp(12));
-        Button export=button("↓ Export PNG",()->save(false));
-        export.setBackground(box(CYAN,17));export.setTextColor(BG);
+        LinearLayout canvasStatus=row();canvasStatus.setPadding(dp(16),dp(7),dp(16),dp(7));
+        TextView pre=text("✦   LIVE PREVIEW",10,CYAN,true);pre.setLetterSpacing(.12f);
+        canvasStatus.addView(pre,new LinearLayout.LayoutParams(0,-2,1));
+        canvasStatus.addView(text(drawing?"● DRAWING ENABLED":state.waterOn?"DRAG TO MOVE WATERMARK":"UNDO / REDO BELOW",10,MUTED,false));
+        root.addView(canvasStatus);
+
+        LinearLayout inspect=column();inspect.setPadding(dp(12),dp(10),dp(12),dp(9));
+        inspect.setBackground(outlined(0xFF181E36,0xFF353B5F,25));
+        LinearLayout tabs=row();
+        String[] names={"✎  TEXT","◐  COLOR","▧  FRAME","✦  DRAW"};
+        for(int i=0;i<names.length;i++){
+            final int index=i;
+            Button tab=button(names[i],()->openTab(index));
+            tab.setTextSize(11);tab.setTextColor(i==inspectorTab?BG:0xFFB0B9DA);
+            tab.setPadding(0,0,0,0);
+            tab.setBackground(i==inspectorTab?gradient(0xFF89F0E2,0xFF9CC6FC,12):box(0xFF222943,12));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(39),1);
+            p.setMargins(dp(2),0,dp(2),0);tabs.addView(tab,p);
+        }
+        inspect.addView(tabs);gap(inspect,9);
+        if(inspectorTab==0){
+            LinearLayout labels=row();
+            addCaptionField(labels,"TOP CAPTION",state.top,"Type top text",v->{state.top=v;});
+            addCaptionField(labels,"BOTTOM CAPTION",state.bottom,"Type bottom text",v->{state.bottom=v;});
+            inspect.addView(labels);gap(inspect,9);
+            LinearLayout extras=row();
+            addFlexButton(extras,"＋ Overlay text",()->textPrompt("Overlay text or emoji",state.extra,v->{state.extra=v;}),false);
+            addFlexButton(extras,"✦ Watermark",()->watermarkDialog(),false);
+            addFlexButton(extras,"Aa Color",()->{push();state.textColor=state.textColor==Color.WHITE?0xFFFFD987:state.textColor==0xFFFFD987?CYAN:Color.WHITE;showStudio();},false);
+            inspect.addView(extras);
+        }else if(inspectorTab==1){
+            addTune(inspect,"Brightness",state.brightness+100,v->{state.brightness=v-100;});
+            addTune(inspect,"Contrast",state.contrast,v->{state.contrast=v;});
+            addTune(inspect,"Saturation",state.saturation,v->{state.saturation=v;});
+            LinearLayout reset=row();
+            addFlexButton(reset,"Reset color",()->{push();state.brightness=0;state.contrast=100;state.saturation=100;showStudio();},false);
+            addFlexButton(reset,"↶ Undo",()->undoAction(),false);
+            inspect.addView(reset);
+        }else if(inspectorTab==2){
+            inspect.addView(kicker("CROP RATIO"));
+            gap(inspect,6);
+            LinearLayout crops=row();
+            for(int j=0;j<RATIOS.length;j++){
+                final int index=j;
+                Button crop=button(RATIOS[j],()->{push();state.ratio=index;showStudio();});
+                crop.setTextSize(11);crop.setPadding(0,0,0,0);
+                crop.setTextColor(state.ratio==j?BG:WHITE);
+                crop.setBackground(state.ratio==j?box(CYAN,11):outlined(0xFF252C48,0xFF495371,11));
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(42),1);
+                lp.setMargins(dp(2),0,dp(2),0);crops.addView(crop,lp);
+            }
+            inspect.addView(crops);gap(inspect,10);
+            LinearLayout transforms=row();
+            addFlexButton(transforms,"↻ Rotate 90°",()->{push();state.rotation=(state.rotation+90)%360;rotatedCache=null;showStudio();},false);
+            addFlexButton(transforms,"✦ Change frame",()->{push();state.frame=(state.frame+1)%4;mode="Screenshot";showStudio();},false);
+            inspect.addView(transforms);
+        }else{
+            inspect.addView(kicker("ANNOTATION BRUSH"));
+            gap(inspect,7);
+            LinearLayout brush=row();
+            for(int i=0;i<INKS.length;i++){
+                final int ix=i;
+                TextView dot=text(inkIndex==i?"✓":"●",21,inkIndex==i?BG:INKS[i],true);
+                dot.setGravity(Gravity.CENTER);
+                dot.setBackground(outlined(inkIndex==i?INKS[i]:0xFF242B45,inkIndex==i?CYAN:0xFF454C67,13));
+                dot.setOnClickListener(v->{inkIndex=ix;showStudio();});
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(42),1);
+                lp.setMargins(dp(3),0,dp(3),0);brush.addView(dot,lp);
+            }
+            inspect.addView(brush);gap(inspect,10);
+            LinearLayout drawControls=row();
+            addFlexButton(drawControls,drawing?"✓ Stop drawing":"✎ Start drawing",()->{drawing=!drawing;showStudio();},true);
+            addFlexButton(drawControls,"Clear marks",()->{push();state.strokes.clear();showStudio();},false);
+            inspect.addView(drawControls);
+        }
+        root.addView(inspect);
+
+        LinearLayout controls=row();controls.setPadding(dp(10),dp(9),dp(10),dp(1));
+        addFlexButton(controls,"↶ Undo",()->undoAction(),false);
+        addFlexButton(controls,"↷ Redo",()->redoAction(),false);
+        addFlexButton(controls,"＋ New image",()->pick(mode),false);
+        root.addView(controls);
+        LinearLayout actions=row();actions.setPadding(dp(10),dp(6),dp(10),dp(8));
+        Button export=actionButton("↓  EXPORT PNG",()->save(false),true);
         actions.addView(export,new LinearLayout.LayoutParams(0,dp(51),1));
-        Button share=button("↗ Share",()->save(true));
+        Button share=actionButton("↗  SHARE",()->save(true),false);
         LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(0,dp(51),1);
         sp.setMargins(dp(8),0,0,0);actions.addView(share,sp);
         root.addView(actions);
         applySafeArea(root);
         setContentView(root);
-    }
-    private void addTool(LinearLayout bar,String name,Runnable cb){
-        Button b=button(name,cb);
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(44));
-        lp.setMargins(dp(3),0,dp(3),0);
-        bar.addView(b,lp);
     }
     private Bitmap rotated() {
         if(state.rotation==0)return source;
