@@ -23,6 +23,8 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.WindowInsets;
+import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -207,6 +209,7 @@ public class MainActivity extends Activity {
         body.addView(card("▤","My Creations","Reopen images saved from BlendCraft.",CYAN,()->showCreations()));
         gap(body,18);
         body.addView(text("SnoPlay • All editing stays on your device",12,Color.rgb(153,160,193),false));
+        applySafeArea(base);
         setContentView(base);
     }
     private void pick(String pickMode) {
@@ -306,13 +309,21 @@ public class MainActivity extends Activity {
     }
     private void captionDialog() {
         EditText top=new EditText(this);top.setHint("Top caption");top.setText(state.top);
+        top.setSingleLine(true);top.setSelectAllOnFocus(true);
+        top.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         EditText bottom=new EditText(this);bottom.setHint("Bottom caption");bottom.setText(state.bottom);
+        bottom.setSingleLine(true);bottom.setSelectAllOnFocus(true);
+        bottom.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         LinearLayout stack=column();stack.setPadding(dp(18),dp(4),dp(18),dp(4));
         stack.addView(top);stack.addView(bottom);
-        new AlertDialog.Builder(this).setTitle("Meme captions").setView(stack)
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Edit meme captions").setView(stack)
             .setNegativeButton("Cancel",null)
             .setPositiveButton("Apply",(d,w)->{push();state.top=top.getText().toString();
-                state.bottom=bottom.getText().toString();showStudio();}).show();
+                state.bottom=bottom.getText().toString();showStudio();}).create();
+        dialog.getWindow();
+        dialog.show();
+        top.requestFocus();
+        dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
     }
     private void watermarkDialog() {
         EditText edit=new EditText(this);edit.setHint("Your signature / brand");
@@ -327,6 +338,25 @@ public class MainActivity extends Activity {
             .setPositiveButton("Apply",(d,w)->{push();state.watermark=edit.getText().toString();
                 state.watermarkAlpha=alpha.getProgress();state.waterOn=true;showStudio();}).show();
     }
+    // Keep the editor away from Android's status, gesture and navigation bars.
+    private void applySafeArea(View root) {
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            int top;
+            int bottom;
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                top = bars.top;
+                bottom = bars.bottom;
+            } else {
+                top = insets.getSystemWindowInsetTop();
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(0, top, 0, bottom);
+            return insets;
+        });
+        root.requestApplyInsets();
+    }
+
     private void showStudio() {
         if(source==null){showHome();return;}
         LinearLayout root=column();root.setBackgroundColor(BG);
@@ -347,6 +377,22 @@ public class MainActivity extends Activity {
             lp.setMargins(dp(3),0,dp(3),0);switcher.addView(b,lp);
         }
         root.addView(switcher);
+        // Primary text tools must not be buried inside the scrolling toolbar.
+        LinearLayout textActions=row();
+        textActions.setPadding(dp(10),dp(2),dp(10),dp(8));
+        Button editCaptions=button("✎ Edit meme captions",()->captionDialog());
+        editCaptions.setBackground(box(CYAN,14));
+        editCaptions.setTextColor(BG);
+        editCaptions.setTextSize(14);
+        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,dp(49),1);
+        cp.setMargins(dp(3),0,dp(3),0);
+        textActions.addView(editCaptions,cp);
+        Button addText=button("＋ Add text",()->textPrompt("Add text or emoji",state.extra,s->{state.extra=s;}));
+        addText.setTextSize(14);
+        LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(0,dp(49),1);
+        ap.setMargins(dp(3),0,dp(3),0);
+        textActions.addView(addText,ap);
+        root.addView(textActions);
         FrameLayout canvasHolder=new FrameLayout(this);
         canvasHolder.setBackgroundColor(0xFF171B32);
         preview=new Preview();
@@ -380,6 +426,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(0,dp(51),1);
         sp.setMargins(dp(8),0,0,0);actions.addView(share,sp);
         root.addView(actions);
+        applySafeArea(root);
         setContentView(root);
     }
     private void addTool(LinearLayout bar,String name,Runnable cb){
@@ -601,6 +648,7 @@ public class MainActivity extends Activity {
                 body.addView(tile);gap(body,8);
             }
         }catch(Exception ignored){toast("Couldn't list your recent creations");}
+        applySafeArea(base);
         setContentView(base);
     }
 }
