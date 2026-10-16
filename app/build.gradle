@@ -73,3 +73,15 @@ android {
 dependencies {
     playImplementation 'com.android.billingclient:billing:9.1.0'
 }
+
+// The Billing SDK pulls Kotlin libraries through multiple dependencies.
+// Keep the stdlib family aligned to avoid duplicate runtime classes.
+configurations.configureEach {
+    resolutionStrategy.eachDependency { dep ->
+        if (dep.requested.group == 'org.jetbrains.kotlin' &&
+            dep.requested.name.startsWith('kotlin-stdlib')) {
+            dep.useVersion '1.8.22'
+            dep.because 'Avoid mixed legacy Kotlin standard libraries in Play Billing build'
+        }
+    }
+}
