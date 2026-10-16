@@ -81,18 +81,14 @@ public class MainActivity extends Activity {
         int ratio = 0;
         int brightness = 0, contrast = 100, saturation = 100;
         int frame = 0, textColor = Color.WHITE;
-        String top = "", bottom = "", extra = "", watermark = "Made with BlendCraft";
-        boolean waterOn = false;
-        int watermarkAlpha = 65;
-        float waterX = .5f, waterY = .93f;
+        String top = "", bottom = "", extra = "";
         ArrayList<Stroke> strokes = new ArrayList<>();
         State copy() {
             State s = new State();
             s.rotation=rotation; s.ratio=ratio; s.brightness=brightness;
             s.contrast=contrast; s.saturation=saturation; s.frame=frame;
             s.textColor=textColor; s.top=top; s.bottom=bottom;
-            s.extra=extra; s.watermark=watermark; s.waterOn=waterOn;
-            s.watermarkAlpha=watermarkAlpha; s.waterX=waterX; s.waterY=waterY;
+            s.extra=extra;
             for(Stroke stroke:strokes) s.strokes.add(stroke.copy());
             return s;
         }
@@ -399,17 +395,10 @@ public class MainActivity extends Activity {
         dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
     }
     private void watermarkDialog() {
-        EditText edit=new EditText(this);edit.setHint("Your signature / brand");
-        edit.setText(state.watermark);
-        LinearLayout stack=column();stack.setPadding(dp(18),dp(6),dp(18),dp(6));
-        stack.addView(edit);
-        TextView label=text("Opacity",14,Color.DKGRAY,false);stack.addView(label);
-        SeekBar alpha=new SeekBar(this);alpha.setMax(100);alpha.setProgress(state.watermarkAlpha);stack.addView(alpha);
-        new AlertDialog.Builder(this).setTitle("Personal watermark").setView(stack)
-            .setNegativeButton("Cancel",null)
-            .setNeutralButton(state.waterOn?"Turn off":"Turn on",(d,w)->{push();state.waterOn=!state.waterOn;showStudio();})
-            .setPositiveButton("Apply",(d,w)->{push();state.watermark=edit.getText().toString();
-                state.watermarkAlpha=alpha.getProgress();state.waterOn=true;showStudio();}).show();
+        new AlertDialog.Builder(this)
+            .setTitle("BlendCraft Free branding")
+            .setMessage("Free exports include a permanent BlendCraft watermark in the lower-right corner. It cannot be hidden, moved, resized or removed in this version. Premium will allow watermark-free exports when secure billing is available.")
+            .setPositiveButton("Got it",null).show();
     }
     // Keep the editor away from Android's status, gesture and navigation bars.
     private void applySafeArea(View root) {
@@ -552,7 +541,7 @@ public class MainActivity extends Activity {
         LinearLayout canvasStatus=row();canvasStatus.setPadding(dp(16),dp(7),dp(16),dp(7));
         TextView pre=text("✦   LIVE PREVIEW",10,CYAN,true);pre.setLetterSpacing(.12f);
         canvasStatus.addView(pre,new LinearLayout.LayoutParams(0,-2,1));
-        canvasStatus.addView(text(drawing?"● DRAWING ENABLED":state.waterOn?"DRAG TO MOVE WATERMARK":"UNDO / REDO BELOW",10,MUTED,false));
+        canvasStatus.addView(text(drawing?"● DRAWING ENABLED":"FREE  •  BRAND MARK ON",10,MUTED,false));
         root.addView(canvasStatus);
 
         LinearLayout inspect=column();inspect.setPadding(dp(12),dp(10),dp(12),dp(9));
@@ -576,7 +565,7 @@ public class MainActivity extends Activity {
             inspect.addView(labels);gap(inspect,9);
             LinearLayout extras=row();
             addFlexButton(extras,"＋ Overlay text",()->textPrompt("Overlay text or emoji",state.extra,v->{state.extra=v;}),false);
-            addFlexButton(extras,"✦ Watermark",()->watermarkDialog(),false);
+            addFlexButton(extras,"🔒 Branding",()->watermarkDialog(),false);
             addFlexButton(extras,"Aa Color",()->{push();state.textColor=state.textColor==Color.WHITE?0xFFFFD987:state.textColor==0xFFFFD987?CYAN:Color.WHITE;showStudio();},false);
             inspect.addView(extras);
         }else if(inspectorTab==1){
@@ -729,16 +718,44 @@ public class MainActivity extends Activity {
         drawLabel(c,state.top,w/2f,h*.1f,w*.085f,w*.92f,state.textColor,true);
         drawLabel(c,state.bottom,w/2f,h*.93f,w*.085f,w*.92f,state.textColor,true);
         drawLabel(c,state.extra,w/2f,h*.52f,w*.07f,w*.9f,state.textColor,false);
-        if(state.waterOn&&!state.watermark.trim().isEmpty()){
-            Paint wp=new Paint(3);wp.setTypeface(android.graphics.Typeface.create("sans-serif-medium",1));
-            wp.setTextSize(w*.035f);wp.setColor(Color.WHITE);
-            wp.setAlpha(Math.round(state.watermarkAlpha*2.55f));
-            wp.setShadowLayer(w*.004f,0,w*.003f,0xFF000000);
-            wp.setTextAlign(Paint.Align.CENTER);
-            String stamp=state.watermark;
-            if(wp.measureText(stamp)>w*.9f)wp.setTextSize(w*.035f*(w*.9f/wp.measureText(stamp)));
-            c.drawText(stamp,state.waterX*w,state.waterY*h,wp);
-        }
+        // Render free-version branding LAST in the central renderer:
+        // previews, file exports, and shares all use this exact canvas.
+        drawFreeBrandMark(c,w,h);
+    }
+    private void drawFreeBrandMark(Canvas canvas,int w,int h) {
+        canvas.save();
+        Paint mark=new Paint(Paint.ANTI_ALIAS_FLAG);
+        String brand="BLENDCRAFT";
+        float font=Math.max(15f,Math.min(w,h)*.036f);
+        mark.setTypeface(android.graphics.Typeface.create("sans-serif-black",1));
+        mark.setTextSize(font);
+        float gap=font*.36f;
+        float dot=font*.27f;
+        float horizontal=font*.60f;
+        float vertical=font*.50f;
+        float textWidth=mark.measureText(brand);
+        float pillW=horizontal*2+dot*2+gap+textWidth;
+        float pillH=font*1.95f;
+        float margin=Math.max(12f,Math.min(w,h)*.018f);
+        float right=w-margin;
+        float bottom=h-margin;
+        float left=right-pillW;
+        float top=bottom-pillH;
+
+        // High contrast background, visible against both dark and bright photographs.
+        mark.setColor(0xE6151B30);
+        canvas.drawRoundRect(left,top,right,bottom,pillH*.35f,pillH*.35f,mark);
+        mark.setStyle(Paint.Style.STROKE);
+        mark.setStrokeWidth(Math.max(1.5f,font*.05f));
+        mark.setColor(0xB6E1F7F3);
+        canvas.drawRoundRect(left,top,right,bottom,pillH*.35f,pillH*.35f,mark);
+        mark.setStyle(Paint.Style.FILL);
+        float baseline=top+pillH*.5f-(mark.ascent()+mark.descent())*.5f;
+        mark.setColor(0xFF85EBE8);
+        canvas.drawCircle(left+horizontal+dot,top+pillH/2,dot,mark);
+        mark.setColor(Color.WHITE);
+        canvas.drawText(brand,left+horizontal+dot*2+gap,baseline,mark);
+        canvas.restore();
     }
     private void drawLabel(Canvas c,String s,float x,float y,float font,float maxWidth,int color,boolean impact){
         if(s==null || s.trim().isEmpty())return;
@@ -807,9 +824,6 @@ public class MainActivity extends Activity {
                 }else if(a==MotionEvent.ACTION_MOVE && activeStroke!=null){
                     activeStroke.coords.add(x);activeStroke.coords.add(y);
                 }else if(a==MotionEvent.ACTION_UP)activeStroke=null;
-            }else if(state.waterOn){
-                if(a==MotionEvent.ACTION_DOWN)push();
-                state.waterX=x;state.waterY=y;
             }
             invalidate();return true;
         }
