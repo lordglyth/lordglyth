@@ -165,52 +165,125 @@ public class MainActivity extends Activity {
         return h;
     }
     private LinearLayout card(String icon,String title,String summary,int accent,Runnable action) {
-        LinearLayout card=column(); card.setPadding(dp(18),dp(17),dp(18),dp(17));
-        card.setBackground(box(PANEL,22));
-        TextView a=text(icon+"   "+title+"   ›",20,accent,true);
-        card.addView(a);
-        gap(card,8);
-        card.addView(text(summary,13,Color.rgb(197,204,228),false));
-        card.setOnClickListener(v->action.run());
-        return card;
+        LinearLayout wrapper=row();
+        wrapper.setPadding(dp(13),dp(13),dp(14),dp(13));
+        wrapper.setBackground(outlined(0xFF1A2038,0xFF35415E,20));
+        TextView symbol=text(icon,24,accent,true);
+        symbol.setGravity(Gravity.CENTER);
+        symbol.setBackground(gradient(0xFF333456,0xFF1D3655,17));
+        wrapper.addView(symbol,new LinearLayout.LayoutParams(dp(55),dp(55)));
+        LinearLayout descriptions=column();
+        descriptions.setPadding(dp(13),0,dp(7),0);
+        descriptions.addView(text(title,18,WHITE,true));
+        gap(descriptions,4);
+        descriptions.addView(text(summary,12,0xFFB8C2DF,false));
+        wrapper.addView(descriptions,new LinearLayout.LayoutParams(0,-2,1));
+        TextView arrow=text("›",27,accent,true);
+        wrapper.addView(arrow);
+        wrapper.setElevation(dp(2));
+        wrapper.setOnClickListener(v->action.run());
+        return wrapper;
+    }
+    private class HeroArtwork extends View {
+        HeroArtwork(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float w=getWidth(),h=getHeight();
+            canvas.save();canvas.scale(w/360f,h/198f);
+            Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setShader(new LinearGradient(0,0,360,200,new int[]{0xFF46307B,0xFF29558D,0xFF15908B},null,Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(0,0,360,198,24,24,p);p.setShader(null);
+
+            p.setColor(0x224BFFFF);
+            canvas.drawCircle(310,24,100,p);canvas.drawCircle(14,185,75,p);
+            for(int n=0;n<24;n++){
+                float x=(n*63+29)%353,y=(n*41+19)%190;
+                p.setColor(n%3==0?0x66E4FBEA:0x50FFFFFF);
+                canvas.drawCircle(x,y,n%5==0?2f:1f,p);
+            }
+
+            // Floating photo, polished with shadows and borders.
+            canvas.save();canvas.rotate(-10,112,105);
+            p.setColor(0x69060022);p.setShadowLayer(11,1,8,0xAA060617);
+            canvas.drawRoundRect(38,12,188,182,15,15,p);p.clearShadowLayer();
+            p.setColor(0xFFF9F4FA);canvas.drawRoundRect(35,8,185,177,15,15,p);
+            p.setShader(new LinearGradient(43,16,184,154,new int[]{0xFFB878CD,0xFFFFAC90,0xFFFFD7AB},null,Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(45,19,175,145,9,9,p);p.setShader(null);
+            p.setColor(0xFFFFE8B8);canvas.drawCircle(143,53,19,p);
+            p.setColor(0xFF695EA6);
+            Path hill=new Path();hill.moveTo(45,137);hill.lineTo(82,91);hill.lineTo(109,116);hill.lineTo(137,76);
+            hill.lineTo(175,129);hill.lineTo(175,145);hill.lineTo(45,145);hill.close();canvas.drawPath(hill,p);
+            p.setColor(0xFF303F85);
+            Path hill2=new Path();hill2.moveTo(45,142);hill2.lineTo(84,119);hill2.lineTo(130,136);
+            hill2.lineTo(175,98);hill2.lineTo(175,145);hill2.close();canvas.drawPath(hill2,p);
+            p.setColor(0xFF332D50);p.setTypeface(android.graphics.Typeface.create("sans-serif-black",1));
+            p.setTextSize(14);canvas.drawText("good vibes only",53,166,p);
+            canvas.restore();
+
+            canvas.save();canvas.rotate(9,230,102);
+            p.setColor(0x99000012);p.setShadowLayer(12,2,5,0xAA03091A);
+            canvas.drawRoundRect(166,20,312,180,15,15,p);p.clearShadowLayer();
+            p.setColor(0xFFEBF8F8);canvas.drawRoundRect(164,18,310,177,15,15,p);
+            p.setShader(new LinearGradient(170,25,306,170,0xFF173F68,0xFF2BCDA8,Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(173,27,301,150,11,11,p);p.setShader(null);
+            p.setColor(0xFFFBEFAF);canvas.drawCircle(235,79,36,p);
+            p.setColor(0xFF172C66);p.setTextSize(27);
+            p.setTypeface(android.graphics.Typeface.create("sans-serif-black",1));
+            p.setTextAlign(Paint.Align.CENTER);canvas.drawText("WOW",235,90,p);
+            p.setColor(0xFF272C53);p.setTextSize(13);canvas.drawText("MAKE IT YOURS",239,169,p);
+            p.setTextAlign(Paint.Align.LEFT);
+            canvas.restore();
+            // Floating sparkle badge
+            p.setColor(0xFFFFE39D);p.setShadowLayer(8,0,0,0xFFFFD888);
+            canvas.drawCircle(315,36,17,p);p.clearShadowLayer();
+            p.setColor(0xFF603B79);p.setTextSize(22);canvas.drawText("✦",305,44,p);
+            canvas.restore();
+        }
     }
     private void showHome() {
-        LinearLayout base=column(); base.setBackgroundColor(BG);
-        ScrollView sc=new ScrollView(this); sc.setFillViewport(true); base.addView(sc);
-        LinearLayout body=column(); body.setPadding(dp(20),dp(28),dp(20),dp(28)); sc.addView(body);
-        TextView logo=text("BLENDCRAFT  ✦",14,CYAN,true); body.addView(logo);
-        gap(body,15);
-        body.addView(text("Create something\nworth sharing.",34,WHITE,true));
-        gap(body,10);
-        body.addView(text("Three studios. One canvas. Zero subscriptions or internet required.",14,Color.rgb(188,198,225),false));
-        gap(body,22);
-        LinearLayout hero=column(); hero.setPadding(dp(20),dp(22),dp(20),dp(22));
-        hero.setBackground(new android.graphics.drawable.GradientDrawable(
-            android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-            new int[]{0xFF5346AB,0xFF3C789B,0xFF1E9A9D}));
-        hero.addView(text("✦  YOUR CREATIVE PLAYGROUND",12,WHITE,true));
-        gap(hero,8);
-        hero.addView(text("Edit photos. Dress up screenshots. Make memes.",21,WHITE,true));
-        gap(hero,12);
-        Button begin=button("Import a picture  →",()->pick("Photo"));
-        begin.setTextColor(BG); begin.setBackground(box(CYAN,14)); hero.addView(begin);
-        body.addView(hero);
-        gap(body,21);
-        body.addView(text("CHOOSE YOUR STUDIO",12,PINK,true));
-        gap(body,12);
-        body.addView(card("◈","Photo Studio","Crop, rotate, adjust color and add text.",CYAN,()->pick("Photo")));
-        gap(body,10);
-        body.addView(card("▧","Screenshot Studio","Gradient frames, markup and clean exports.",PINK,()->pick("Screenshot")));
-        gap(body,10);
-        body.addView(card("✦","Meme Studio","Classic captions, stickers and quick edits.",0xFFFFD991,()->pick("Meme")));
-        gap(body,10);
-        body.addView(card("◉","Blank Canvas","Start creating without importing a picture.",0xFFB4ACFF,()->startBlank()));
-        gap(body,10);
-        body.addView(card("▤","My Creations","Reopen images saved from BlendCraft.",CYAN,()->showCreations()));
+        LinearLayout base=column(); base.setBackgroundColor(0xFF0B0E20);
+        ScrollView sc=new ScrollView(this);sc.setFillViewport(true);
+        sc.setVerticalScrollBarEnabled(false);base.addView(sc);
+        LinearLayout body=column();body.setPadding(dp(17),dp(19),dp(17),dp(25));sc.addView(body);
+
+        LinearLayout brand=row();
+        TextView mark=text("✦",25,BG,true);
+        mark.setGravity(Gravity.CENTER);
+        mark.setBackground(gradient(0xFF8BEAE9,0xFFB59BFB,15));
+        brand.addView(mark,new LinearLayout.LayoutParams(dp(45),dp(45)));
+        LinearLayout brandLines=column();brandLines.setPadding(dp(10),0,0,0);
+        TextView word=text("BLENDCRAFT",16,WHITE,true);word.setLetterSpacing(.16f);
+        brandLines.addView(word);brandLines.addView(text("SNO PLAY  /  CREATOR SUITE",10,CYAN,true));
+        brand.addView(brandLines,new LinearLayout.LayoutParams(0,-2,1));
+        TextView v=text("V 1.1",11,LAVENDER,true);brand.addView(v);
+        body.addView(brand);
+        gap(body,24);
+        body.addView(text("Make it look",29,WHITE,true));
+        TextView iconic=text("iconic.",40,0xFF9BEDEB,true);body.addView(iconic);
+        gap(body,7);
+        body.addView(text("Photos, screenshots and memes — your creative toolkit, beautifully offline.",14,0xFFB6C1DA,false));
+        gap(body,19);
+        HeroArtwork art=new HeroArtwork();
+        body.addView(art,new LinearLayout.LayoutParams(-1,dp(189)));
+        gap(body,13);
+        Button create=actionButton("＋  START CREATING  →",()->pick("Photo"),true);
+        body.addView(create,new LinearLayout.LayoutParams(-1,dp(51)));
+        gap(body,23);
+        TextView group=kicker("CHOOSE YOUR CREATIVE SPACE");
+        group.setTextColor(PINK);body.addView(group);gap(body,10);
+        body.addView(card("◈","Photo Lab","Color grading, crops and overlays.",CYAN,()->pick("Photo")));
+        gap(body,9);
+        body.addView(card("▧","Screen Studio","Showcase screenshots in style.",LAVENDER,()->pick("Screenshot")));
+        gap(body,9);
+        body.addView(card("✎","Meme Maker","Instant captions and bold typography.",0xFFFFD58E,()->pick("Meme")));
+        gap(body,9);
+        body.addView(card("✦","Blank Canvas","Create something from nothing.",PINK,()->startBlank()));
+        gap(body,9);
+        body.addView(card("▤","My Creations","Reopen your latest exported work.",CYAN,()->showCreations()));
         gap(body,18);
-        body.addView(text("SnoPlay • All editing stays on your device",12,Color.rgb(153,160,193),false));
-        applySafeArea(base);
-        setContentView(base);
+        TextView footer=text("PRIVATE BY DESIGN  •  NO ACCOUNT  •  OFFLINE",10,0xFF8B98B9,true);
+        footer.setGravity(Gravity.CENTER);body.addView(footer);
+        applySafeArea(base);setContentView(base);
     }
     private void pick(String pickMode) {
         nextMode=pickMode;
@@ -240,7 +313,7 @@ public class MainActivity extends Activity {
                 if(bm==null)throw new Exception("Not a supported image.");
                 source=bm; rotatedCache=null; cacheAngle=-1;
                 state=new State(); undo.clear(); redo.clear(); mode=studio;
-                if("Meme".equals(mode)){state.top="TOP TEXT";state.bottom="BOTTOM TEXT";}
+                // Start with empty captions; the visible editor uses helpful placeholders.
                 showStudio();
             }
         } catch(Exception error){toast("Could not open image: "+error.getMessage());}
@@ -691,14 +764,35 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             int w=outputWidth(),h=outputHeight();
-            float scale=Math.min((getWidth()-dp(20))/(float)w,(getHeight()-dp(20))/(float)h);
+            Paint background=new Paint(3);
+            background.setShader(new LinearGradient(0,0,getWidth(),getHeight(),
+                new int[]{0xFF12162D,0xFF1C1D39,0xFF132D3E},null,Shader.TileMode.CLAMP));
+            canvas.drawRect(0,0,getWidth(),getHeight(),background);
+            background.setShader(null);
+            background.setColor(0x164F70AC);
+            for(int x=dp(12);x<getWidth();x+=dp(23)){
+                for(int y=dp(8);y<getHeight();y+=dp(23))
+                    canvas.drawCircle(x,y,dp(.65f),background);
+            }
+            float scale=Math.min((getWidth()-dp(32))/(float)w,(getHeight()-dp(30))/(float)h);
             if(scale<=0)return;
             scaledW=w*scale;scaledH=h*scale;
             left=(getWidth()-scaledW)/2;top=(getHeight()-scaledH)/2;
-            Paint shadow=new Paint(3);shadow.setColor(0xAA000000);shadow.setShadowLayer(dp(8),0,dp(4),0xAA000000);
-            canvas.drawRect(left,top,left+scaledW,top+scaledH,shadow);
+            Paint shadow=new Paint(3);shadow.setColor(0xAA000000);
+            shadow.setShadowLayer(dp(18),0,dp(7),0xCC000008);
+            canvas.drawRoundRect(left,top,left+scaledW,top+scaledH,dp(4),dp(4),shadow);
             canvas.save();canvas.translate(left,top);canvas.scale(scale,scale);
             artwork(canvas,w,h);canvas.restore();
+            Paint border=new Paint(3);border.setStyle(Paint.Style.STROKE);
+            border.setStrokeWidth(dp(1.2f));border.setColor(0x995DEBDC);
+            canvas.drawRect(left,top,left+scaledW,top+scaledH,border);
+            // Little editor-style alignment handles
+            Paint point=new Paint(3);point.setColor(CYAN);
+            float z=dp(4);
+            canvas.drawCircle(left,top,z,point);
+            canvas.drawCircle(left+scaledW,top,z,point);
+            canvas.drawCircle(left,top+scaledH,z,point);
+            canvas.drawCircle(left+scaledW,top+scaledH,z,point);
         }
         @Override public boolean onTouchEvent(MotionEvent event) {
             int a=event.getActionMasked();
