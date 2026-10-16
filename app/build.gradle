@@ -44,6 +44,7 @@ android {
     def signingReady = keyFilePath && storeSecret && keyAliasName && keySecret
     signingConfigs {
         production {
+            storeType 'pkcs12'
             if (signingReady) {
                 storeFile file(keyFilePath)
                 storePassword storeSecret
