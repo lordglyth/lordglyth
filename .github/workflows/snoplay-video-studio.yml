@@ -1,0 +1,31 @@
+name: SnoPlay Video Studio smoke tests
+on:
+  push:
+    branches:
+      - snoplay-video-studio
+    paths:
+      - 'SnoPlay-VideoStudio/**'
+      - '.github/workflows/snoplay-video-studio.yml'
+  workflow_dispatch:
+
+jobs:
+  studio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install FFmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+      - name: Install Python dependencies
+        working-directory: SnoPlay-VideoStudio
+        run: python -m pip install -r requirements.txt
+      - name: Check JavaScript syntax
+        run: node --check SnoPlay-VideoStudio/web/app.js
+      - name: Test storyboard, image and MP4 render
+        working-directory: SnoPlay-VideoStudio
+        run: python -m unittest discover -s tests -v
