@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#080b19">
+<title>SnoPlay Video Studio — Local AI Film Workshop</title>
+<link rel="stylesheet" href="/web/style.css">
+<script src="/web/app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+ <a href="/" class="brand"><span class="logo">✦</span><span><strong>SNOPLAY</strong><small>VIDEO STUDIO / LOCAL</small></span></a>
+ <span class="status" id="serviceStatus">Checking local engines…</span>
+</header>
+<main class="layout">
+ <aside class="sidebar">
+  <p class="eyebrow">CREATIVE PIPELINE</p>
+  <nav aria-label="Project steps">
+   <a href="#brief" class="step"><b>01</b><span>Story prompt<small>Write the idea</small></span></a>
+   <a href="#references" class="step"><b>02</b><span>Visual references<small>Keep your characters</small></span></a>
+   <a href="#storyboard" class="step"><b>03</b><span>Storyboard<small>Edit every shot</small></span></a>
+   <a href="#assembly" class="step"><b>04</b><span>Final render<small>Export your film</small></span></a>
+  </nav>
+  <div class="sidebar-card"><strong>Local-first.</strong><p>No subscriptions, cloud uploads, or API keys required for the starter pipeline. Use Ollama and ComfyUI when available.</p></div>
+  <div class="history"><div class="sectionhead"><b>Projects</b><button id="reloadProjects" class="smallbtn" title="Refresh projects">↻</button></div><div id="projectList" class="project-list"><span class="muted">Loading…</span></div></div>
+ </aside>
+ <div class="workspace">
+  <section class="hero">
+   <div class="eyebrow">YOUR OWN MULTI-SHOT FILM WORKSHOP</div>
+   <h1>One idea.<br><em>An entire story.</em></h1>
+   <p>Plan shots with your local AI, generate footage with your ComfyUI workflow or bring your own clips, then stitch a complete MP4 with audio.</p>
+   <div class="chips"><span>✦ Ollama story planning</span><span>◈ ComfyUI-ready</span><span>▶ FFmpeg assembly</span><span>◇ Up to 10 minutes</span></div>
+  </section>
+  <section id="brief" class="panel">
+   <div class="sectionhead"><div><span class="eyebrow">STEP 01</span><h2>Tell your story</h2></div><span class="hint">Prompt → scenes</span></div>
+   <form id="createForm">
+    <label for="projectTitle">Project name</label>
+    <input id="projectTitle" maxlength="120" value="Everbloom — Daily Letter" required>
+    <label for="prompt">Describe the complete film</label>
+    <textarea id="prompt" rows="7" required placeholder="An enchanted academy letter opens into a living magical world. Show the academy's news, keep the same headmistress design, then finish with playful spotted lumenfox kits getting into mischief…"></textarea>
+    <div class="formgrid">
+     <div><label for="duration">Target length</label><select id="duration"><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60" selected>60 seconds</option><option value="120">2 minutes</option><option value="300">5 minutes</option><option value="600">10 minutes</option></select></div>
+     <div><label for="ratio">Aspect ratio</label><select id="ratio"><option value="9:16" selected>9:16 · Portrait</option><option value="16:9">16:9 · Landscape</option><option value="1:1">1:1 · Square</option></select></div>
+     <div><label for="style">Visual style</label><select id="style"><option value="magical anime" selected>Magical anime</option><option value="cinematic realistic">Cinematic</option><option value="storybook illustration">Storybook</option><option value="stylized 3D animation">Stylized 3D</option><option value="dark fantasy">Dark fantasy</option><option value="documentary">Documentary</option></select></div>
+    </div>
+    <button class="primary action" type="submit" id="planButton">✦ Create storyboard</button>
+   </form>
+  </section>
+  <section id="references" class="panel">
+   <div class="sectionhead"><div><span class="eyebrow">STEP 02</span><h2>Character & style references</h2></div><span class="hint" id="refCount">0 / 16</span></div>
+   <p class="muted">Keep up to sixteen reference images with your project. Uploading images preserves them locally; to use one in the rendered film, attach it to a scene below.</p>
+   <div class="uploadrow"><input id="refFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple><button id="uploadRefs" type="button" class="secondary">Add references</button></div>
+   <div class="thumbs" id="refThumbs"></div>
+  </section>
+  <section id="storyboard" class="panel">
+   <div class="sectionhead"><div><span class="eyebrow">STEP 03</span><h2>Storyboard & shot director</h2></div><button id="saveScenes" class="secondary" type="button">Save edits</button></div>
+   <p class="muted" id="storyInfo">Create a project to populate the shot list. Every shot can use an image, a video clip, or an automatically generated title card.</p>
+   <div id="scenes" class="scenes"><div class="empty">✧ Your scenes will appear here.</div></div>
+  </section>
+  <section id="assembly" class="panel">
+   <div class="sectionhead"><div><span class="eyebrow">STEP 04</span><h2>Soundtrack & final assembly</h2></div><span class="hint">MP4 / H.264</span></div>
+   <div class="formgrid two">
+    <div><label>Music / atmosphere</label><input id="musicFile" type="file" accept="audio/*"><button id="uploadMusic" class="secondary mini">Upload soundtrack</button></div>
+    <div><label>Narration recording</label><input id="voiceFile" type="file" accept="audio/*"><button id="uploadVoice" class="secondary mini">Upload voiceover</button></div>
+   </div>
+   <div class="renderbar"><button id="renderButton" type="button" class="primary">▶ Render full video</button><a id="videoDownload" class="download disabled" href="#" download>⬇ Download MP4</a></div>
+   <div class="progress"><div id="progressFill"></div></div><p class="muted" id="renderState">No render running.</p>
+   <video id="preview" controls playsinline hidden></video>
+  </section>
+  <details class="panel advanced" id="comfyPanel">
+   <summary><span>⚙ Advanced · ComfyUI workflow adapter</span><small>Optional local generative shots</small></summary>
+   <p class="muted">Export a working video-generation workflow from ComfyUI in <strong>API format</strong>. The studio substitutes <code>{{PROMPT}}</code>, <code>{{WIDTH}}</code>, <code>{{HEIGHT}}</code>, and <code>{{FRAMES}}</code> in text fields, or can target one explicit text node. Your models and nodes must already be installed in ComfyUI.</p>
+   <label for="workflowFile">ComfyUI API workflow JSON</label><input id="workflowFile" type="file" accept=".json,application/json">
+   <label for="promptNode">Positive CLIP node ID (optional)</label><input id="promptNode" placeholder="e.g. 6">
+   <button id="uploadWorkflow" class="secondary">Save workflow adapter</button>
+   <p class="muted">Generation runs one shot at a time and downloads a resulting video or image. This does not include proprietary VideoGen model weights.</p>
+  </details>
+  <footer>SNOPLAY VIDEO STUDIO · ORIGINAL OPEN-SOURCE STARTER · ALL PROCESSING ON YOUR COMPUTER</footer>
+ </div>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
