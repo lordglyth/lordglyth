@@ -12,6 +12,10 @@ One idea → Ollama storyboard (or offline fallback) → editable scenes → ref
 - Optional ComfyUI running on http://127.0.0.1:8188 with a working installed video workflow
 - No account, subscription or external API key required.
 
+## Quick start on Windows
+
+After downloading the branch, double-click **START-WINDOWS.bat**. It creates a virtual environment, installs dependencies on first launch, and opens the local editor. FFmpeg must already be installed.
+
 ## Start on Windows PowerShell
 
 Install FFmpeg and restart your terminal:
