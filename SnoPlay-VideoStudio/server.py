@@ -475,6 +475,14 @@ def start_comfy(pid:str,idx:int):
     job(pid,f"ComfyUI scene {idx+1}",lambda:comfy_generate(pid,idx))
     return {"started":True}
 
+
+@app.head("/api/projects/{pid}/video")
+def video_exists(pid: str):
+    f = directory(pid) / "movie.mp4"
+    if not f.is_file():
+        raise HTTPException(404, "Render not available")
+    return FileResponse(f, media_type="video/mp4")
+
 if __name__=="__main__":
     import uvicorn
     uvicorn.run(app,host="127.0.0.1",port=8765)
