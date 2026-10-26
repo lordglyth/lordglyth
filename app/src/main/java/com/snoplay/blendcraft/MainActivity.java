@@ -630,6 +630,13 @@ public class MainActivity extends Activity {
             state.glitch.seedLocked=!state.glitch.seedLocked;showGlitchLab();
         },false);
         panel.addView(line);gap(panel,7);
+        if(layer.type==0){
+            String[] sortBy={"Brightness","Saturation","Red channel","Green channel","Blue channel"};
+            Button sortButton=actionButton("Sort by: "+sortBy[Math.floorMod(layer.sortKey,5)],()->
+                glitchChange(()->currentGlitchLayer().sortKey=(currentGlitchLayer().sortKey+1)%5),false);
+            panel.addView(sortButton,new LinearLayout.LayoutParams(-1,dp(42)));
+            gap(panel,7);
+        }
         LinearLayout seeds=row();
         addFlexButton(seeds,"Seed: "+layer.seed,()->{
             EditText field=new EditText(this);field.setSingleLine(true);
@@ -754,7 +761,7 @@ public class MainActivity extends Activity {
                 JSONObject o=new JSONObject();
                 o.put("type",layer.type);o.put("intensity",layer.intensity);
                 o.put("scale",layer.scale);o.put("threshold",layer.threshold);
-                o.put("direction",layer.direction);o.put("opacity",layer.opacity);
+                o.put("direction",layer.direction);o.put("sortKey",layer.sortKey);o.put("opacity",layer.opacity);
                 o.put("blend",layer.blend);o.put("seed",layer.seed);
                 a.put(o);
             }
@@ -779,7 +786,7 @@ public class MainActivity extends Activity {
             GlitchFx.Layer l=new GlitchFx.Layer();
             l.type=Math.max(0,Math.min(9,o.optInt("type",0)));
             l.intensity=o.optInt("intensity",65);l.scale=o.optInt("scale",40);
-            l.threshold=o.optInt("threshold",95);l.direction=o.optInt("direction",0);
+            l.threshold=o.optInt("threshold",95);l.direction=o.optInt("direction",0);l.sortKey=o.optInt("sortKey",0);
             l.opacity=o.optInt("opacity",100);l.blend=o.optInt("blend",0);
             l.seed=o.optLong("seed",2026);
             c.layers.add(l);
@@ -1019,7 +1026,7 @@ public class MainActivity extends Activity {
         for(GlitchFx.Layer layer:state.glitch.layers){
             key.append('|').append(layer.type).append(',').append(layer.intensity)
                 .append(',').append(layer.scale).append(',').append(layer.threshold)
-                .append(',').append(layer.direction).append(',').append(layer.opacity)
+                .append(',').append(layer.direction).append(',').append(layer.sortKey).append(',').append(layer.opacity)
                 .append(',').append(layer.seed).append(',').append(layer.blend);
         }
         for(GlitchFx.Point pt:state.glitch.brush)
