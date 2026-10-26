@@ -1560,11 +1560,23 @@ public class MainActivity extends Activity {
     private class Preview extends View {
         float left,top,scaledW,scaledH;
         private boolean pinching=false,brushDown=false;
-        private float pinchStartDist=1f,pinchStartZoom=1f,midX,midY,startPanX,startPanY;
+        private float pinchStartDist=1f,pinchStartZoom=1f;
+        private float pinchAnchorX,pinchAnchorY;
         private float lastX,lastY,lastNX,lastNY,cursorX,cursorY;
-        private boolean cursorVisible=false;
-        private long lastRender=0;
+        private boolean cursorVisible=false,needsPaintRender=false;
+
         Preview(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_HARDWARE,null);}
+
+        private float[] brushRadiiOnScreen(GlitchCoordinates mapper,GlitchFx.Layer layer){
+            Bitmap original=rotated();
+            float rawRadius=Math.min(original.getWidth(),original.getHeight())*layer.brushSize/100f;
+            float x=rawRadius/original.getWidth()*(mapper.right-mapper.left)
+                /Math.max(0.0001f,mapper.sourceRight-mapper.sourceLeft)*scaledW;
+            float y=rawRadius/original.getHeight()*(mapper.bottom-mapper.top)
+                /Math.max(0.0001f,mapper.sourceBottom-mapper.sourceTop)*scaledH;
+            return new float[]{Math.max(dp(2),x),Math.max(dp(2),y)};
+        }
+
         @Override protected void onDraw(Canvas canvas){
             super.onDraw(canvas);
             int w=outputWidth(),h=outputHeight();
@@ -1588,26 +1600,47 @@ public class MainActivity extends Activity {
             Paint border=new Paint(3);border.setStyle(Paint.Style.STROKE);
             border.setStrokeWidth(dp(1));border.setColor(0x995DEBDC);
             canvas.drawRect(left,top,left+scaledW,top+scaledH,border);
-            if(inGlitchLab && cursorVisible && glitchBrushMode && !state.glitch.layers.isEmpty()){
-                GlitchFx.Layer layer=currentGlitchLayer();
-                float radius=Math.min(scaledW,scaledH)*layer.brushSize/100f;
-                Paint cursor=new Paint(3);
-                cursor.setStyle(Paint.Style.STROKE);
-                cursor.setStrokeWidth(dp(2));
-                cursor.setColor(glitchEraseMode?0xFFFF8181:0xFF81FFDB);
-                canvas.drawCircle(cursorX,cursorY,Math.max(dp(5),radius),cursor);
-                cursor.setColor(Color.WHITE);
-                cursor.setStrokeWidth(dp(1));
-                canvas.drawCircle(cursorX,cursorY,dp(2),cursor);
+            if(inGlitchLab && !state.glitch.layers.isEmpty() && glitchBrushMode){
+                GlitchCoordinates mapper=effectMapper();
+                GlitchFx.Layer active=currentGlitchLayer();
+                float[] radius=brushRadiiOnScreen(mapper,active);
+                // Show the actual touched mask immediately while the CPU effect is rendering.
+                // Positions use the same source-to-output transform as input mapping.
+                if(brushDown || (glitchWorking && !glitchSignature().equals(glitchCacheKey))){
+                    Paint overlay=new Paint(Paint.ANTI_ALIAS_FLAG);
+                    int from=Math.max(0,active.marks.size()-140);
+                    for(int i=from;i<active.marks.size();i++){
+                        GlitchFx.PaintMark mark=active.marks.get(i);
+                        GlitchCoordinates.Point p=mapper.toOutput(mark.x,mark.y);
+                        if(p==null)continue;
+                        overlay.setColor(mark.erase?0x66FF7979:0x5578F9DC);
+                        float px=left+p.x*scaledW,py=top+p.y*scaledH;
+                        canvas.drawOval(px-radius[0],py-radius[1],px+radius[0],py+radius[1],overlay);
+                    }
+                }
+                if(cursorVisible){
+                    Paint cursor=new Paint(Paint.ANTI_ALIAS_FLAG);
+                    cursor.setStyle(Paint.Style.STROKE);
+                    cursor.setStrokeWidth(dp(2));
+                    cursor.setColor(glitchEraseMode?0xFFFF8181:0xFF81FFDB);
+                    canvas.drawOval(cursorX-radius[0],cursorY-radius[1],
+                        cursorX+radius[0],cursorY+radius[1],cursor);
+                    cursor.setColor(Color.WHITE);cursor.setStrokeWidth(dp(1));
+                    canvas.drawCircle(cursorX,cursorY,dp(2),cursor);
+                }
             }
             canvas.restore();
         }
+
         private void dabTo(float nx,float ny){
-            float pxW=outputWidth(),pxH=outputHeight();
+            Bitmap original=rotated();
             GlitchFx.Layer active=currentGlitchLayer();
-            float maxGap=Math.max(3,Math.min(pxW,pxH)*active.brushSize*.0025f);
-            float distance=(float)Math.hypot((nx-lastNX)*pxW,(ny-lastNY)*pxH);
-            int steps=Math.min(90,Math.max(1,(int)Math.ceil(distance/maxGap)));
+            float rawRadius=Math.min(original.getWidth(),original.getHeight())*active.brushSize/100f;
+            // Use ~3 dabs per brush radius instead of hundreds of redundant per-pixel marks.
+            float maxGap=Math.max(1.5f,rawRadius*.34f);
+            float distance=(float)Math.hypot((nx-lastNX)*original.getWidth(),
+                (ny-lastNY)*original.getHeight());
+            int steps=Math.min(48,Math.max(1,(int)Math.ceil(distance/maxGap)));
             float oldX=lastNX,oldY=lastNY;
             for(int i=1;i<=steps;i++){
                 float t=i/(float)steps;
@@ -1615,84 +1648,89 @@ public class MainActivity extends Activity {
             }
             lastNX=nx;lastNY=ny;
         }
+
         @Override public boolean onTouchEvent(MotionEvent event){
-            int a=event.getActionMasked(),count=event.getPointerCount();
-            if(a==MotionEvent.ACTION_POINTER_DOWN && count>=2){
-                pinching=true;brushDown=false;cursorVisible=false;
+            int action=event.getActionMasked();
+            int count=event.getPointerCount();
+            if(action==MotionEvent.ACTION_POINTER_DOWN && count>=2){
+                if(brushDown && needsPaintRender)requestGlitchRender();
+                brushDown=false;pinching=true;cursorVisible=false;
                 pinchStartDist=(float)Math.hypot(event.getX(0)-event.getX(1),
                     event.getY(0)-event.getY(1));
-                if(pinchStartDist<1)pinchStartDist=1;
+                pinchStartDist=Math.max(1f,pinchStartDist);
                 pinchStartZoom=canvasZoom;
-                midX=(event.getX(0)+event.getX(1))*.5f;
-                midY=(event.getY(0)+event.getY(1))*.5f;
-                startPanX=canvasPanX;startPanY=canvasPanY;
+                float centerX=(event.getX(0)+event.getX(1))*.5f;
+                float centerY=(event.getY(0)+event.getY(1))*.5f;
+                // Keep the image point under both fingers pinned while zooming.
+                pinchAnchorX=(centerX-left)/Math.max(1f,scaledW);
+                pinchAnchorY=(centerY-top)/Math.max(1f,scaledH);
                 invalidate();return true;
             }
-            if(count>=2 && a==MotionEvent.ACTION_MOVE){
+            if(count>=2 && action==MotionEvent.ACTION_MOVE){
                 float distance=(float)Math.hypot(event.getX(0)-event.getX(1),
                     event.getY(0)-event.getY(1));
                 canvasZoom=Math.max(.75f,Math.min(8f,pinchStartZoom*distance/pinchStartDist));
-                float centerX=(event.getX(0)+event.getX(1))*.5f;
-                float centerY=(event.getY(0)+event.getY(1))*.5f;
-                canvasPanX=startPanX+centerX-midX;
-                canvasPanY=startPanY+centerY-midY;
+                float fit=Math.min((getWidth()-dp(14))/(float)outputWidth(),
+                    (getHeight()-dp(14))/(float)outputHeight());
+                float newW=outputWidth()*fit*canvasZoom;
+                float newH=outputHeight()*fit*canvasZoom;
+                float x=(event.getX(0)+event.getX(1))*.5f;
+                float y=(event.getY(0)+event.getY(1))*.5f;
+                canvasPanX=x-getWidth()*.5f+newW*(.5f-pinchAnchorX);
+                canvasPanY=y-getHeight()*.5f+newH*(.5f-pinchAnchorY);
                 invalidate();return true;
             }
-            if(a==MotionEvent.ACTION_POINTER_UP){
+            if(action==MotionEvent.ACTION_POINTER_UP){
                 pinching=true;cursorVisible=false;invalidate();return true;
             }
-            if(a==MotionEvent.ACTION_CANCEL){
+            if(action==MotionEvent.ACTION_CANCEL){
+                if(needsPaintRender)requestGlitchRender();
                 cursorVisible=false;brushDown=false;pinching=false;
-                requestGlitchRender();invalidate();return true;
+                needsPaintRender=false;invalidate();return true;
             }
-            if(a==MotionEvent.ACTION_DOWN){
+            if(action==MotionEvent.ACTION_DOWN){
                 pinching=false;brushDown=false;
                 lastX=event.getX();lastY=event.getY();
             }
             if(pinching){
-                if(a==MotionEvent.ACTION_UP)pinching=false;
+                if(action==MotionEvent.ACTION_UP)pinching=false;
                 return true;
             }
-            if(scaledW<=0 || scaledH<=0)return true;
+            if(scaledW<=0||scaledH<=0)return true;
             float screenX=event.getX(),screenY=event.getY();
-            boolean inside=screenX>=left&&screenX<=left+scaledW
-                &&screenY>=top&&screenY<=top+scaledH;
-            float nx=Math.max(0,Math.min(1,(screenX-left)/scaledW));
-            float ny=Math.max(0,Math.min(1,(screenY-top)/scaledH));
+            float outX=(screenX-left)/scaledW,outY=(screenY-top)/scaledH;
             if(inGlitchLab){
                 if(glitchBrushMode && !state.glitch.layers.isEmpty()){
-                    cursorX=screenX;cursorY=screenY;
-                    cursorVisible=inside;
-                    if(a==MotionEvent.ACTION_DOWN && inside){
-                        push();brushDown=true;lastNX=nx;lastNY=ny;
-                        addGlitchBrushDab(nx,ny);
-                    }else if(a==MotionEvent.ACTION_MOVE && brushDown && inside){
-                        dabTo(nx,ny);
-                    }
-                    if(a==MotionEvent.ACTION_UP){
-                        if(brushDown && inside)dabTo(nx,ny);
+                    GlitchCoordinates.Point imgPoint=effectMapper().toSource(outX,outY);
+                    cursorX=screenX;cursorY=screenY;cursorVisible=imgPoint!=null;
+                    if(action==MotionEvent.ACTION_DOWN && imgPoint!=null){
+                        push();brushDown=true;needsPaintRender=true;
+                        lastNX=imgPoint.x;lastNY=imgPoint.y;
+                        addGlitchBrushDab(imgPoint.x,imgPoint.y);
+                    } else if(action==MotionEvent.ACTION_MOVE && brushDown){
+                        if(imgPoint!=null)dabTo(imgPoint.x,imgPoint.y);
+                    } else if(action==MotionEvent.ACTION_UP){
+                        if(brushDown && imgPoint!=null)dabTo(imgPoint.x,imgPoint.y);
                         cursorVisible=false;brushDown=false;
-                        requestGlitchRender();
-                    }else if(a==MotionEvent.ACTION_MOVE && brushDown){
-                        long now=android.os.SystemClock.uptimeMillis();
-                        if(now-lastRender>160 && !glitchWorking){
-                            requestGlitchRender();lastRender=now;
-                        }
+                        if(needsPaintRender)requestGlitchRender();
+                        needsPaintRender=false;
                     }
-                }else if(a==MotionEvent.ACTION_MOVE){
-                    canvasPanX+=screenX-lastX;canvasPanY+=screenY-lastY;
+                }else if(action==MotionEvent.ACTION_MOVE){
+                    canvasPanX+=screenX-lastX;
+                    canvasPanY+=screenY-lastY;
                 }
                 lastX=screenX;lastY=screenY;
                 invalidate();return true;
             }
+            float nx=Math.max(0,Math.min(1,outX)),ny=Math.max(0,Math.min(1,outY));
             if(drawing){
-                if(a==MotionEvent.ACTION_DOWN){
+                if(action==MotionEvent.ACTION_DOWN){
                     push();activeStroke=new Stroke();activeStroke.color=INKS[inkIndex];
                     activeStroke.coords.add(nx);activeStroke.coords.add(ny);
                     state.strokes.add(activeStroke);
-                }else if(a==MotionEvent.ACTION_MOVE && activeStroke!=null){
+                }else if(action==MotionEvent.ACTION_MOVE && activeStroke!=null){
                     activeStroke.coords.add(nx);activeStroke.coords.add(ny);
-                }else if(a==MotionEvent.ACTION_UP)activeStroke=null;
+                }else if(action==MotionEvent.ACTION_UP)activeStroke=null;
             }
             invalidate();return true;
         }
