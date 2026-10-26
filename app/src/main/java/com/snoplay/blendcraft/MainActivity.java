@@ -8,6 +8,11 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.os.Handler;
+import android.os.Looper;
+import org.json.JSONObject;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
@@ -60,6 +65,13 @@ public class MainActivity extends Activity {
     private final ArrayDeque<State> redo = new ArrayDeque<>();
     private Preview preview;
     private boolean drawing = false;
+    private boolean inGlitchLab = false, glitchBrushMode = false, glitchCompare = false;
+    private int glitchTab = 0;
+    private Bitmap glitchCache = null;
+    private String glitchCacheKey = "", glitchRequestedKey = "";
+    private final ExecutorService glitchWorkers = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private boolean glitchWorking = false;
     private int inkIndex = 0;
     private Stroke activeStroke;
     private String nextMode = "Photo";
@@ -83,12 +95,13 @@ public class MainActivity extends Activity {
         int frame = 0, textColor = Color.WHITE;
         String top = "", bottom = "", extra = "";
         ArrayList<Stroke> strokes = new ArrayList<>();
+        GlitchFx.Config glitch=new GlitchFx.Config();
         State copy() {
             State s = new State();
             s.rotation=rotation; s.ratio=ratio; s.brightness=brightness;
             s.contrast=contrast; s.saturation=saturation; s.frame=frame;
             s.textColor=textColor; s.top=top; s.bottom=bottom;
-            s.extra=extra;
+            s.extra=extra;s.glitch=glitch.copy();
             for(Stroke stroke:strokes) s.strokes.add(stroke.copy());
             return s;
         }
@@ -273,6 +286,10 @@ public class MainActivity extends Activity {
         gap(body,9);
         body.addView(card("✎","Meme Maker","Instant captions and bold typography.",0xFFFFD58E,()->pick("Meme")));
         gap(body,9);
+        body.addView(card("⚡","Glitch Lab","Ten live pixel effects, masks, brushes and layers.",LAVENDER,()->{
+            if(source==null)pick("Photo");else showGlitchLab();
+        }));
+        gap(body,9);
         body.addView(card("✦","Blank Canvas","Create something from nothing.",PINK,()->startBlank()));
         gap(body,9);
         body.addView(card("▤","My Creations","Reopen your latest exported work.",CYAN,()->showCreations()));
@@ -301,14 +318,16 @@ public class MainActivity extends Activity {
             BitmapFactory.Options options=new BitmapFactory.Options();
             options.inJustDecodeBounds=true;
             BitmapFactory.decodeStream(input,null,options);
-            int sample=1;
-            while(options.outWidth/sample>2600 || options.outHeight/sample>2600) sample*=2;
-            options.inSampleSize=sample; options.inJustDecodeBounds=false;
+            if(options.outWidth<=0 || options.outHeight<=0) throw new Exception("Invalid image dimensions");
+            // Refuse large files instead of silently downsampling output resolution.
+            if((long)options.outWidth*options.outHeight>12_000_000L)
+                throw new Exception("Image exceeds 12MP memory-safe editing limit. Resize it explicitly first.");
+            options.inSampleSize=1; options.inJustDecodeBounds=false;
             try(InputStream actual=getContentResolver().openInputStream(uri)) {
                 Bitmap bm=BitmapFactory.decodeStream(actual,null,options);
                 if(bm==null)throw new Exception("Not a supported image.");
                 source=bm; rotatedCache=null; cacheAngle=-1;
-                state=new State(); undo.clear(); redo.clear(); mode=studio;
+                state=new State(); undo.clear(); redo.clear(); mode=studio;resetGlitchCache();
                 // Start with empty captions; the visible editor uses helpful placeholders.
                 showStudio();
             }
@@ -326,7 +345,7 @@ public class MainActivity extends Activity {
         p.setTextSize(90);c.drawText("BLENDCRAFT",115,680,p);
         p.setTextSize(42);c.drawText("Your canvas is ready.",115,756,p);
         source=bm;rotatedCache=null;cacheAngle=-1;
-        state=new State();undo.clear();redo.clear();mode="Meme";showStudio();
+        state=new State();undo.clear();redo.clear();mode="Meme";resetGlitchCache();showStudio();
     }
     private void setNewMode(String studio) {
         if(source==null){pick(studio);return;}
@@ -338,11 +357,11 @@ public class MainActivity extends Activity {
     }
     private void undoAction() {
         if(undo.isEmpty()){toast("Nothing to undo");return;}
-        redo.push(state.copy());state=undo.pop();showStudio();
+        redo.push(state.copy());state=undo.pop();if(inGlitchLab)showGlitchLab();else showStudio();
     }
     private void redoAction() {
         if(redo.isEmpty()){toast("Nothing to redo");return;}
-        undo.push(state.copy());state=redo.pop();showStudio();
+        undo.push(state.copy());state=redo.pop();if(inGlitchLab)showGlitchLab();else showStudio();
     }
     private void textPrompt(String title,String initial,java.util.function.Consumer<String> done) {
         EditText box=new EditText(this);box.setSingleLine(false);
@@ -507,6 +526,8 @@ public class MainActivity extends Activity {
         showStudio();
     }
     private void showStudio() {
+        inGlitchLab=false;glitchBrushMode=false;
+        requestGlitchRender();
         if(source==null){showHome();return;}
         LinearLayout root=column();root.setBackgroundColor(0xFF0B0E20);
 
@@ -532,6 +553,11 @@ public class MainActivity extends Activity {
             switches.addView(b,lp);
         }
         root.addView(switches);
+        Button lab=actionButton("✦ GLITCH LAB  ·  10 EFFECTS  →",()->showGlitchLab(),false);
+        lab.setTextColor(0xFFBB9DFF);
+        LinearLayout.LayoutParams labParams=new LinearLayout.LayoutParams(-1,dp(39));
+        labParams.setMargins(dp(14),dp(1),dp(14),dp(5));
+        root.addView(lab,labParams);
 
         FrameLayout canvasHolder=new FrameLayout(this);
         canvasHolder.setBackgroundColor(0xFF101429);
@@ -634,7 +660,7 @@ public class MainActivity extends Activity {
         if(state.rotation==0)return source;
         if(rotatedCache!=null && cacheAngle==state.rotation)return rotatedCache;
         Matrix m=new Matrix();m.postRotate(state.rotation);
-        if(rotatedCache!=null && rotatedCache!=source && !rotatedCache.isRecycled())rotatedCache.recycle();
+        // Workers may still read an earlier rotated bitmap. Do not recycle it here.
         rotatedCache=Bitmap.createBitmap(source,0,0,source.getWidth(),source.getHeight(),m,true);
         cacheAngle=state.rotation;return rotatedCache;
     }
@@ -652,8 +678,65 @@ public class MainActivity extends Activity {
             default: return "Screenshot".equals(mode)?1f:imageRatio();
         }
     }
-    private int outputWidth(){return 1440;}
-    private int outputHeight(){return Math.max(450,Math.min(2800,Math.round(1440f/outputRatio())));}
+
+    private void resetGlitchCache(){
+        glitchCache=null;glitchCacheKey="";glitchRequestedKey="";glitchWorking=false;
+    }
+    private String glitchSignature(){
+        if(source==null)return "";
+        StringBuilder key=new StringBuilder();
+        key.append(System.identityHashCode(source)).append(':').append(state.rotation)
+            .append(':').append(state.glitch.mask).append(':').append(state.glitch.brushRadius);
+        for(GlitchFx.Layer layer:state.glitch.layers){
+            key.append('|').append(layer.type).append(',').append(layer.intensity)
+                .append(',').append(layer.scale).append(',').append(layer.threshold)
+                .append(',').append(layer.direction).append(',').append(layer.opacity)
+                .append(',').append(layer.seed).append(',').append(layer.blend);
+        }
+        for(GlitchFx.Point pt:state.glitch.brush)
+            key.append(':').append((int)(pt.x*1000)).append(',').append((int)(pt.y*1000));
+        return key.toString();
+    }
+    private void requestGlitchRender(){
+        if(source==null || !state.glitch.enabled()){glitchWorking=false;return;}
+        final String key=glitchSignature();
+        if(key.equals(glitchCacheKey)||key.equals(glitchRequestedKey))return;
+        glitchRequestedKey=key;glitchWorking=true;
+        final Bitmap input=rotated();
+        final GlitchFx.Config snapshot=state.glitch.copy();
+        glitchWorkers.submit(()->{
+            Bitmap result=null;
+            try{result=GlitchFx.render(input,snapshot);}
+            catch(Exception e){android.util.Log.e("BlendCraft","Glitch render failed",e);}
+            final Bitmap rendered=result;
+            mainHandler.post(()->{
+                if(!key.equals(glitchRequestedKey))return;
+                glitchWorking=false;
+                if(rendered!=null){glitchCache=rendered;glitchCacheKey=key;}
+                if(preview!=null)preview.invalidate();
+            });
+        });
+    }
+    private Bitmap glitchBitmapForRender(){
+        Bitmap input=rotated();
+        if(glitchCompare || !state.glitch.enabled())return input;
+        if(glitchSignature().equals(glitchCacheKey) && glitchCache!=null)return glitchCache;
+        if(glitchExporting)return GlitchFx.render(input,state.glitch.copy());
+        return input;
+    }
+    private boolean glitchExporting=false;
+
+    private int outputWidth(){
+        if(source==null)return 1440;
+        Bitmap b=rotated();
+        if("Screenshot".equals(mode))return Math.max(1080,Math.min(b.getWidth(),4000));
+        return Math.max(1,crop(b,outputRatio()).width());
+    }
+    private int outputHeight(){
+        if(source==null)return 1440;
+        if("Screenshot".equals(mode))return outputWidth();
+        return Math.max(1,crop(rotated(),outputRatio()).height());
+    }
     private Rect crop(Bitmap bm,float ratio) {
         int w=bm.getWidth(),h=bm.getHeight();
         float r=(float)w/h;
@@ -683,7 +766,7 @@ public class MainActivity extends Activity {
     }
     private void artwork(Canvas c,int w,int h) {
         c.drawColor(BG);
-        Bitmap bm=rotated();
+        Bitmap bm=glitchBitmapForRender();
         if("Screenshot".equals(mode)){
             int[][] gradients={
                 {0xFF7C55CF,0xFF33BDD2},{0xFFFF75B4,0xFFFFD0A1},
