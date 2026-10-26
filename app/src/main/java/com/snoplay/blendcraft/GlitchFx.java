@@ -14,7 +14,11 @@ public final class GlitchFx {
     private GlitchFx() {}
     public static final String[] EFFECTS = {
         "Pixel Sort","RGB Split","Data Smear","VHS / CRT","Signal Noise",
-        "Artifact Blocks","Wave Distortion","Posterize","Ghosting","Corrupt Streaks"
+        "Artifact Blocks","Wave Distortion","Posterize","Ghosting","Corrupt Streaks",
+        "Glitch","PNG Corruption","WebP Fracture","Paintbrush","Field","Hacker",
+        "Triangle","Delaunay","Drone","Pixel","XOR","Scanner","Window",
+        "Burn","Quake","Warp","3D","Zalgo","Chromatic","Datamosh",
+        "Shifting Runes Curse"
     };
     public static final String[] PRESETS = {
         "Signal Loss","Data Melt","Broken Neon","VHS Haunting",
@@ -30,11 +34,13 @@ public final class GlitchFx {
     }
     public static class Layer {
         public int type=0, intensity=65, scale=40, threshold=40, direction=0, sortKey=0, opacity=100, blend=0;
+        public int runeColor=0xFF6DFFCB, phase=0, runeSpeed=55;
         public long seed=2026;
         public Layer copy(){
             Layer l=new Layer();
             l.type=type;l.intensity=intensity;l.scale=scale;l.threshold=threshold;
             l.direction=direction;l.sortKey=sortKey;l.opacity=opacity;l.blend=blend;l.seed=seed;
+            l.runeColor=runeColor;l.phase=phase;l.runeSpeed=runeSpeed;
             return l;
         }
     }
@@ -139,7 +145,8 @@ public final class GlitchFx {
             case 6:return wave(src,w,h,l);
             case 7:return posterize(src,w,h,l);
             case 8:return ghost(src,w,h,l);
-            default:return streaks(src,w,h,l);
+            case 9:return streaks(src,w,h,l);
+            default:return ExtraGlitches.apply(src,w,h,l);
         }
     }
     private static int clamp(int v,int min,int max){return Math.min(max,Math.max(min,v));}
