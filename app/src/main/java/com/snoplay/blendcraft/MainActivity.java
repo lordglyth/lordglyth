@@ -581,8 +581,10 @@ public class MainActivity extends Activity {
             LinearLayout line=row();
             for(int i=start;i<Math.min(start+2,GlitchFx.EFFECTS.length);i++){
                 final int which=i;
-                Button btn=actionButton((currentGlitchLayer().type==i?"● ":"✧ ")+GlitchFx.EFFECTS[i],
-                    ()->glitchChange(()->currentGlitchLayer().type=which),currentGlitchLayer().type==i);
+                boolean selected=!state.glitch.layers.isEmpty() &&
+                    state.glitch.layers.get(state.glitch.active).type==i;
+                Button btn=actionButton((selected?"● ":"✧ ")+GlitchFx.EFFECTS[i],
+                    ()->glitchChange(()->currentGlitchLayer().type=which),selected);
                 btn.setTextSize(12);
                 LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(42),1);
                 lp.setMargins(dp(3),dp(3),dp(3),dp(3));line.addView(btn,lp);
@@ -862,7 +864,7 @@ public class MainActivity extends Activity {
     }
 
     private void showStudio() {
-        inGlitchLab=false;glitchBrushMode=false;
+        inGlitchLab=false;glitchBrushMode=false;glitchCompare=false;
         requestGlitchRender();
         if(source==null){showHome();return;}
         LinearLayout root=column();root.setBackgroundColor(0xFF0B0E20);
@@ -1036,7 +1038,7 @@ public class MainActivity extends Activity {
     private void requestGlitchRender(){
         if(source==null || !state.glitch.enabled()){glitchWorking=false;return;}
         final String key=glitchSignature();
-        if(key.equals(glitchCacheKey)||key.equals(glitchRequestedKey))return;
+        if(key.equals(glitchCacheKey)||(key.equals(glitchRequestedKey)&&glitchWorking))return;
         glitchRequestedKey=key;glitchWorking=true;
         final Bitmap input=rotated();
         final GlitchFx.Config snapshot=state.glitch.copy();
