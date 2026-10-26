@@ -573,7 +573,9 @@ public class MainActivity extends Activity {
         GlitchFx.Layer active=state.glitch.layers.isEmpty()?null:currentGlitchLayer();
         // Selecting a brush is never an all-image effect application.
         if(active!=null && active.type==type && active.paintedOnly){
-            glitchEraseMode=false;glitchBrushMode=true;glitchTab=4;showGlitchLab();return;
+            glitchEraseMode=false;glitchBrushMode=true;glitchTab=type==30?2:4;
+            canvasExpanded=type!=30;
+            showGlitchLab();return;
         }
         if(state.glitch.layers.size()>=GlitchFx.MAX_LAYERS){
             toast("Layer limit reached. Delete a layer to add another brush.");return;
@@ -586,7 +588,8 @@ public class MainActivity extends Activity {
         layer.paintGroup=nextPaintGroup();
         state.glitch.layers.add(layer);
         state.glitch.active=state.glitch.layers.size()-1;
-        glitchBrushMode=true;glitchEraseMode=false;glitchTab=4;
+        glitchBrushMode=true;glitchEraseMode=false;glitchTab=type==30?2:4;
+        canvasExpanded=type!=30;
         showGlitchLab();
     }
     private int nextPaintGroup(){
@@ -606,6 +609,7 @@ public class MainActivity extends Activity {
         }
         state.glitch.active=state.glitch.layers.size()-1;
         glitchBrushMode=true;glitchEraseMode=false;glitchTab=4;
+        canvasExpanded=true;
         showGlitchLab();
     }
     private void addGlitchBrushDab(float x,float y){
@@ -861,16 +865,35 @@ public class MainActivity extends Activity {
         });
     }
     private void glitchMasks(LinearLayout panel){
-        glitchLabel(panel,"MASK WHERE THE EFFECT IS VISIBLE");
+        glitchLabel(panel,"OPTIONAL WHOLE-REGION MASKS · MANUAL PAINT IS DEFAULT");
         for(int i=0;i<GlitchFx.MASKS.length;i++){
             final int ix=i;
             Button b=actionButton((state.glitch.mask==i?"● ":"○ ")+GlitchFx.MASKS[i],
-                ()->glitchChange(()->state.glitch.mask=ix),state.glitch.mask==i);
+                ()->{
+                    if(state.glitch.layers.isEmpty()) {
+                        toast("Select an effect first.");return;
+                    }
+                    if(ix==3){
+                        glitchChange(()->{
+                            currentGlitchLayer().paintedOnly=true;
+                            glitchBrushMode=true;glitchEraseMode=false;glitchTab=4;
+                        });
+                    }else{
+                        new AlertDialog.Builder(this)
+                            .setTitle("Apply a region mask?")
+                            .setMessage("This switches the selected effect from brush painting to a "+GlitchFx.MASKS[ix]+" selection. Your earlier painted masks remain saved for Undo.")
+                            .setNegativeButton("Cancel",null)
+                            .setPositiveButton("Apply",(d,w)->glitchChange(()->{
+                                state.glitch.mask=ix;
+                                currentGlitchLayer().paintedOnly=false;
+                            })).show();
+                    }
+                },state.glitch.mask==i);
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(42));
             p.setMargins(0,dp(2),0,dp(3));panel.addView(b,p);
         }
         gap(panel,8);
-        panel.addView(text("Center and background masks are geometric ellipse selections, NOT AI subject segmentation. Brush masks let you select image areas directly.",11,MUTED,false));
+        panel.addView(text("Brush paints independent areas on each effect layer. Center and background choices are optional geometric selections—not AI subject detection.",11,MUTED,false));
     }
     private void glitchBrush(LinearLayout panel){
         glitchLabel(panel,"PAINT THE SELECTED EFFECT · ONE FINGER");
@@ -923,7 +946,7 @@ public class MainActivity extends Activity {
             final int ix=i;
             GlitchFx.Layer layer=state.glitch.layers.get(i);
             Button b=actionButton((state.glitch.active==i?"● ":"○ ")+"L"+(i+1)+"  "+GlitchFx.EFFECTS[layer.type],
-                ()->{state.glitch.active=ix;showGlitchLab();},i==state.glitch.active);
+                ()->{state.glitch.active=ix;glitchBrushMode=true;glitchEraseMode=false;glitchTab=4;showGlitchLab();},i==state.glitch.active);
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(39));
             lp.setMargins(0,dp(2),0,dp(3));panel.addView(b,lp);
         }
