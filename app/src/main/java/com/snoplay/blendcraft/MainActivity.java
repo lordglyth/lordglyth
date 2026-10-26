@@ -605,23 +605,104 @@ public class MainActivity extends Activity {
         }
         scroll.addView(strip);dest.addView(scroll);
     }
-    private void glitchEffects(LinearLayout panel){
-        glitchLabel(panel,"SELECT A REAL PIXEL EFFECT");
-        for(int start=0;start<GlitchFx.EFFECTS.length;start+=2){
-            LinearLayout line=row();
-            for(int i=start;i<Math.min(start+2,GlitchFx.EFFECTS.length);i++){
-                final int which=i;
-                boolean selected=!state.glitch.layers.isEmpty() &&
-                    state.glitch.layers.get(state.glitch.active).type==i;
-                Button btn=actionButton((selected?"● ":"✧ ")+GlitchFx.EFFECTS[i],
-                    ()->glitchChange(()->currentGlitchLayer().type=which),selected);
-                btn.setTextSize(12);
-                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(42),1);
-                lp.setMargins(dp(3),dp(3),dp(3),dp(3));line.addView(btn,lp);
-            }
-            panel.addView(line);
+
+    private Bitmap effectThumbnailSource;
+    private int effectThumbSourceId=0, effectThumbRotation=-1;
+    private void effectThumbnail(ImageView target,int type){
+        Bitmap current=rotated();
+        int id=System.identityHashCode(source);
+        if(effectThumbnailSource==null||effectThumbSourceId!=id||effectThumbRotation!=state.rotation){
+            effectThumbnailSource=Bitmap.createScaledBitmap(current,145,135,true);
+            effectThumbSourceId=id;effectThumbRotation=state.rotation;
+            glitchThumbnails.clear();
         }
-        panel.addView(text("Tip: Pixel Sort uses direction and threshold. Effects layer without flattening the original.",11,MUTED,false));
+        final String key=id+":"+state.rotation+":"+type+":"+
+            (type==30 && !state.glitch.layers.isEmpty()?currentGlitchLayer().runeColor:0);
+        Bitmap thumb=glitchThumbnails.get(key);
+        if(thumb!=null && !thumb.isRecycled()){target.setImageBitmap(thumb);return;}
+        target.setImageBitmap(effectThumbnailSource);
+        final Bitmap small=effectThumbnailSource;
+        int tint=type==30 && !state.glitch.layers.isEmpty()
+            ?currentGlitchLayer().runeColor:0xFF6DFFCB;
+        thumbnailWorkers.submit(()->{
+            Bitmap result=null;
+            try{
+                GlitchFx.Config c=new GlitchFx.Config();
+                GlitchFx.Layer layer=new GlitchFx.Layer();
+                layer.type=type;layer.intensity=94;layer.opacity=100;layer.scale=62;
+                layer.threshold=28;layer.seed=773L+type*9813;layer.runeColor=tint;
+                c.layers.add(layer);
+                result=GlitchFx.render(small,c);
+            }catch(Exception e){android.util.Log.w("BlendCraft","Thumbnail "+type,e);}
+            final Bitmap rendered=result;
+            mainHandler.post(()->{
+                if(rendered==null)return;
+                if(effectThumbSourceId!=id)return;
+                glitchThumbnails.put(key,rendered);
+                if(target.getWindowToken()!=null)target.setImageBitmap(rendered);
+            });
+        });
+    }
+    private void glitchEffects(LinearLayout panel){
+        glitchLabel(panel,"REAL EFFECTS · TAP AN IMAGE TO APPLY");
+        for(int start=0;start<GlitchFx.EFFECTS.length;start+=2){
+            LinearLayout tiles=row();
+            for(int i=start;i<Math.min(start+2,GlitchFx.EFFECTS.length);i++){
+                final int chosen=i;
+                boolean selected=!state.glitch.layers.isEmpty()
+                    &&state.glitch.layers.get(state.glitch.active).type==i;
+                FrameLayout tile=new FrameLayout(this);
+                tile.setBackground(outlined(0xFF242945,selected?CYAN:0xFF424A6A,17));
+                tile.setClipToOutline(true);
+                ImageView img=new ImageView(this);
+                img.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                tile.addView(img,new FrameLayout.LayoutParams(-1,-1));
+                effectThumbnail(img,i);
+                TextView name=text(GlitchFx.EFFECTS[i],12,WHITE,true);
+                name.setGravity(Gravity.CENTER);
+                name.setPadding(dp(4),dp(7),dp(4),dp(7));
+                name.setBackground(gradient(0xDA1C1235,0xE8222943,0));
+                FrameLayout.LayoutParams labelPos=new FrameLayout.LayoutParams(-1,dp(35),Gravity.BOTTOM);
+                tile.addView(name,labelPos);
+                if(selected){
+                    TextView selectedMark=text("●",19,CYAN,true);
+                    FrameLayout.LayoutParams marker=new FrameLayout.LayoutParams(dp(28),dp(28),Gravity.TOP|Gravity.RIGHT);
+                    selectedMark.setGravity(Gravity.CENTER);tile.addView(selectedMark,marker);
+                }
+                tile.setOnClickListener(view->glitchChange(()->currentGlitchLayer().type=chosen));
+                LinearLayout.LayoutParams bounds=new LinearLayout.LayoutParams(0,dp(130),1);
+                bounds.setMargins(dp(3),dp(3),dp(3),dp(3));
+                tiles.addView(tile,bounds);
+            }
+            if(start+1>=GlitchFx.EFFECTS.length){
+                View filler=new View(this);
+                LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(130),1);
+                p.setMargins(dp(3),dp(3),dp(3),dp(3));tiles.addView(filler,p);
+            }
+            panel.addView(tiles);
+        }
+        gap(panel,9);
+        panel.addView(text("Thumbnails are generated from your imported image using the real effect algorithms. Pixel sorting, XOR, Zalgo, compression artifacts, and Shifting Runes Curse are all editable layers.",11,MUTED,false));
+    }
+    private void chooseRuneColor(){
+        GlitchFx.Layer layer=currentGlitchLayer();
+        LinearLayout layout=column();
+        layout.setPadding(dp(15),dp(8),dp(15),dp(12));
+        TextView instruction=text("Drag around the wheel to pick your rune glow.",14,Color.DKGRAY,false);
+        instruction.setGravity(Gravity.CENTER);layout.addView(instruction);
+        gap(layout,10);
+        TextView swatch=text("✦  Selected rune color",16,Color.BLACK,true);
+        swatch.setGravity(Gravity.CENTER);
+        RuneColorWheel wheel=new RuneColorWheel(this,layer.runeColor,
+            col->{swatch.setBackground(box(col,16));swatch.setTextColor(0xFF111225);});
+        layout.addView(wheel,new LinearLayout.LayoutParams(-1,dp(255)));
+        gap(layout,7);
+        swatch.setBackground(box(layer.runeColor,16));
+        layout.addView(swatch,new LinearLayout.LayoutParams(-1,dp(48)));
+        new AlertDialog.Builder(this).setTitle("Shifting Runes · Color Wheel").setView(layout)
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Use this color",(dialog,which)->glitchChange(()->currentGlitchLayer().runeColor=wheel.getColor()))
+            .show();
     }
     private void glitchPresets(LinearLayout panel){
         glitchLabel(panel,"8 CURATED CORRUPTIONS");
@@ -668,6 +749,21 @@ public class MainActivity extends Activity {
                 glitchChange(()->currentGlitchLayer().sortKey=(currentGlitchLayer().sortKey+1)%5),false);
             panel.addView(sortButton,new LinearLayout.LayoutParams(-1,dp(42)));
             gap(panel,7);
+        }
+
+        if(layer.type==30){
+            glitchLabel(panel,"SHIFTING RUNES CURSE");
+            Button wheel=actionButton("✦ RUNE COLOR WHEEL",()->chooseRuneColor(),true);
+            panel.addView(wheel,new LinearLayout.LayoutParams(-1,dp(46)));
+            gap(panel,5);
+            glitchSeek(panel,"Shift speed",layer.runeSpeed,v->layer.runeSpeed=v);
+            LinearLayout runeOptions=row();
+            addFlexButton(runeOptions,runeLive?"⏸ PAUSE SHIFT":"▶ LIVE SHIFT",
+                ()->{runeLive=!runeLive;armRuneAnimation(layer.runeSpeed);showGlitchLab();},false);
+            addFlexButton(runeOptions,"↻ NEXT RUNES",()->glitchChange(()->currentGlitchLayer().phase++),false);
+            panel.addView(runeOptions);
+            gap(panel,8);
+            panel.addView(text("The selected glow is applied to procedurally drawn runic glyphs. Live Shift cycles their positions; exports capture the current frame.",11,MUTED,false));
         }
         LinearLayout seeds=row();
         addFlexButton(seeds,"Seed: "+layer.seed,()->{
@@ -883,7 +979,7 @@ public class MainActivity extends Activity {
         else if(glitchTab==4)glitchBrush(panel);
         else if(glitchTab==5)glitchLayers(panel);
         else glitchExportPanel(panel);
-        surface.addView(scroll,new LinearLayout.LayoutParams(-1,dp(233)));
+        surface.addView(scroll,new LinearLayout.LayoutParams(-1,dp(glitchTab==0?310:233)));
         root.addView(surface);
 
         LinearLayout quick=row();quick.setPadding(dp(7),dp(7),dp(7),dp(8));
