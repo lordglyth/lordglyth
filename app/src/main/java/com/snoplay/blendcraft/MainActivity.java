@@ -34,6 +34,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
@@ -47,6 +48,8 @@ import java.io.OutputStream;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.HashMap;
+import java.util.Map;
 
 public class MainActivity extends Activity {
     private static final int BG = Color.rgb(13,16,35);
@@ -72,6 +75,33 @@ public class MainActivity extends Activity {
     private final ExecutorService glitchWorkers = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private boolean glitchWorking = false;
+    private final ExecutorService thumbnailWorkers=Executors.newFixedThreadPool(2);
+    private final Map<String,Bitmap> glitchThumbnails=new HashMap<>();
+    private boolean runeLive=true, runeFrameScheduled=false;
+    private final Runnable runeFrameTicker=new Runnable(){
+        @Override public void run(){
+            runeFrameScheduled=false;
+            if(!inGlitchLab || !runeLive || !state.glitch.enabled())return;
+            boolean changed=false;
+            int speed=50;
+            for(GlitchFx.Layer l:state.glitch.layers){
+                if(l.type==30){
+                    speed=l.runeSpeed;
+                    if(!glitchWorking){l.phase=(l.phase+1)%8192;changed=true;}
+                }
+            }
+            if(changed)requestGlitchRender();
+            armRuneAnimation(speed);
+        }
+    };
+    private void armRuneAnimation(int speed){
+        if(runeFrameScheduled||!inGlitchLab||!runeLive)return;
+        boolean found=false;
+        for(GlitchFx.Layer l:state.glitch.layers)if(l.type==30)found=true;
+        if(!found)return;
+        runeFrameScheduled=true;
+        mainHandler.postDelayed(runeFrameTicker,Math.max(180,850-speed*6));
+    }
     private int inkIndex = 0;
     private Stroke activeStroke;
     private String nextMode = "Photo";
@@ -765,6 +795,7 @@ public class MainActivity extends Activity {
                 o.put("scale",layer.scale);o.put("threshold",layer.threshold);
                 o.put("direction",layer.direction);o.put("sortKey",layer.sortKey);o.put("opacity",layer.opacity);
                 o.put("blend",layer.blend);o.put("seed",layer.seed);
+                o.put("runeColor",layer.runeColor);o.put("phase",layer.phase);o.put("runeSpeed",layer.runeSpeed);
                 a.put(o);
             }
             root.put("layers",a);
@@ -786,11 +817,13 @@ public class MainActivity extends Activity {
         if(layers!=null)for(int i=0;i<Math.min(GlitchFx.MAX_LAYERS,layers.length());i++){
             JSONObject o=layers.getJSONObject(i);
             GlitchFx.Layer l=new GlitchFx.Layer();
-            l.type=Math.max(0,Math.min(9,o.optInt("type",0)));
+            l.type=Math.max(0,Math.min(GlitchFx.EFFECTS.length-1,o.optInt("type",0)));
             l.intensity=o.optInt("intensity",65);l.scale=o.optInt("scale",40);
             l.threshold=o.optInt("threshold",95);l.direction=o.optInt("direction",0);l.sortKey=o.optInt("sortKey",0);
             l.opacity=o.optInt("opacity",100);l.blend=o.optInt("blend",0);
             l.seed=o.optLong("seed",2026);
+            l.runeColor=o.optInt("runeColor",0xFF6DFFCB);
+            l.phase=o.optInt("phase",0);l.runeSpeed=o.optInt("runeSpeed",55);
             c.layers.add(l);
         }
         JSONArray pts=root.optJSONArray("brush");
@@ -811,6 +844,7 @@ public class MainActivity extends Activity {
         if(source==null){showHome();return;}
         inGlitchLab=true;
         requestGlitchRender();
+        armRuneAnimation(50);
         LinearLayout root=column();root.setBackgroundColor(0xFF0A0B16);
 
         LinearLayout titlebar=row();titlebar.setPadding(dp(12),dp(7),dp(12),dp(5));
@@ -891,7 +925,7 @@ public class MainActivity extends Activity {
             switches.addView(b,lp);
         }
         root.addView(switches);
-        Button lab=actionButton("✦ GLITCH LAB  ·  10 EFFECTS  →",()->showGlitchLab(),false);
+        Button lab=actionButton("✦ GLITCH LAB  ·  "+GlitchFx.EFFECTS.length+" EFFECTS  →",()->showGlitchLab(),false);
         lab.setTextColor(0xFFBB9DFF);
         LinearLayout.LayoutParams labParams=new LinearLayout.LayoutParams(-1,dp(39));
         labParams.setMargins(dp(14),dp(1),dp(14),dp(5));
@@ -1019,6 +1053,8 @@ public class MainActivity extends Activity {
 
     private void resetGlitchCache(){
         glitchCache=null;glitchCacheKey="";glitchRequestedKey="";glitchWorking=false;
+        for(Bitmap b:glitchThumbnails.values())if(b!=null&&!b.isRecycled())b.recycle();
+        glitchThumbnails.clear();
     }
     private String glitchSignature(){
         if(source==null)return "";
@@ -1029,7 +1065,9 @@ public class MainActivity extends Activity {
             key.append('|').append(layer.type).append(',').append(layer.intensity)
                 .append(',').append(layer.scale).append(',').append(layer.threshold)
                 .append(',').append(layer.direction).append(',').append(layer.sortKey).append(',').append(layer.opacity)
-                .append(',').append(layer.seed).append(',').append(layer.blend);
+                .append(',').append(layer.seed).append(',').append(layer.blend)
+                .append(',').append(layer.runeColor).append(',').append(layer.phase)
+                .append(',').append(layer.runeSpeed);
         }
         for(GlitchFx.Point pt:state.glitch.brush)
             key.append(':').append((int)(pt.x*1000)).append(',').append((int)(pt.y*1000));
@@ -1044,7 +1082,16 @@ public class MainActivity extends Activity {
         final GlitchFx.Config snapshot=state.glitch.copy();
         glitchWorkers.submit(()->{
             Bitmap result=null;
-            try{result=GlitchFx.render(input,snapshot);}
+            try{
+                // Preview uses an explicitly smaller derivative; export always renders the
+                // full original. This bounds preview latency and pixel array allocations.
+                int max=Math.max(input.getWidth(),input.getHeight());
+                Bitmap previewSource=max>1000
+                    ?Bitmap.createScaledBitmap(input,Math.max(1,Math.round(input.getWidth()*1000f/max)),
+                        Math.max(1,Math.round(input.getHeight()*1000f/max)),true)
+                    :input;
+                result=GlitchFx.render(previewSource,snapshot);
+            }
             catch(Exception e){android.util.Log.e("BlendCraft","Glitch render failed",e);}
             final Bitmap rendered=result;
             mainHandler.post(()->{
