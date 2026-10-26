@@ -69,6 +69,8 @@ public class MainActivity extends Activity {
     private Preview preview;
     private boolean drawing = false;
     private boolean inGlitchLab = false, glitchBrushMode = false, glitchCompare = false;
+    private boolean glitchEraseMode=false, canvasExpanded=false;
+    private float canvasZoom=1f,canvasPanX=0f,canvasPanY=0f;
     private int glitchTab = 0;
     private Bitmap glitchCache = null;
     private String glitchCacheKey = "", glitchRequestedKey = "";
@@ -559,9 +561,64 @@ public class MainActivity extends Activity {
     // The lab is an editor surface inside MainActivity: it shares source,
     // undo/redo, caption overlay, watermark and the existing export pipeline.
     private GlitchFx.Layer currentGlitchLayer(){
-        if(state.glitch.layers.isEmpty())state.glitch.layers.add(new GlitchFx.Layer());
+        if(state.glitch.layers.isEmpty()) {
+            GlitchFx.Layer l=new GlitchFx.Layer();
+            l.paintedOnly=true;
+            state.glitch.layers.add(l);
+        }
         state.glitch.active=Math.max(0,Math.min(state.glitch.active,state.glitch.layers.size()-1));
         return state.glitch.layers.get(state.glitch.active);
+    }
+    private void chooseGlitchPaintBrush(int type){
+        GlitchFx.Layer active=state.glitch.layers.isEmpty()?null:currentGlitchLayer();
+        // Selecting a brush is never an all-image effect application.
+        if(active!=null && active.type==type && active.paintedOnly){
+            glitchEraseMode=false;glitchBrushMode=true;glitchTab=4;showGlitchLab();return;
+        }
+        if(state.glitch.layers.size()>=GlitchFx.MAX_LAYERS){
+            toast("Layer limit reached. Delete a layer to add another brush.");return;
+        }
+        push();
+        GlitchFx.Layer layer=new GlitchFx.Layer();
+        layer.type=type;
+        layer.paintedOnly=true;
+        layer.brushSize=7;
+        layer.paintGroup=nextPaintGroup();
+        state.glitch.layers.add(layer);
+        state.glitch.active=state.glitch.layers.size()-1;
+        glitchBrushMode=true;glitchEraseMode=false;glitchTab=4;
+        showGlitchLab();
+    }
+    private int nextPaintGroup(){
+        int max=0;
+        for(GlitchFx.Layer l:state.glitch.layers)max=Math.max(max,l.paintGroup);
+        return max+1;
+    }
+    private void selectGlitchPreset(int index){
+        GlitchFx.Config preset=GlitchFx.preset(index);
+        if(state.glitch.layers.size()+preset.layers.size()>GlitchFx.MAX_LAYERS){
+            toast("Not enough free effect layers. Remove layers first.");return;
+        }
+        push();int group=nextPaintGroup();
+        for(GlitchFx.Layer layer:preset.layers){
+            layer.paintedOnly=true;layer.paintGroup=group;layer.brushSize=7;
+            state.glitch.layers.add(layer);
+        }
+        state.glitch.active=state.glitch.layers.size()-1;
+        glitchBrushMode=true;glitchEraseMode=false;glitchTab=4;
+        showGlitchLab();
+    }
+    private void addGlitchBrushDab(float x,float y){
+        if(state.glitch.layers.isEmpty())return;
+        GlitchFx.Layer active=currentGlitchLayer();
+        int group=active.paintGroup;
+        for(GlitchFx.Layer layer:state.glitch.layers){
+            if(layer==active || (group!=0 && layer.paintedOnly && layer.paintGroup==group)){
+                layer.paintedOnly=true;
+                if(layer.marks.size()<6000)
+                    layer.marks.add(new GlitchFx.PaintMark(x,y,glitchEraseMode));
+            }
+        }
     }
     private void glitchChange(Runnable r){
         push();r.run();requestGlitchRender();showGlitchLab();
@@ -644,7 +701,7 @@ public class MainActivity extends Activity {
         });
     }
     private void glitchEffects(LinearLayout panel){
-        glitchLabel(panel,"REAL EFFECTS · TAP AN IMAGE TO APPLY");
+        glitchLabel(panel,"CHOOSE A BRUSH · THEN PAINT DIRECTLY ON YOUR PHOTO");
         for(int start=0;start<GlitchFx.EFFECTS.length;start+=2){
             LinearLayout tiles=row();
             for(int i=start;i<Math.min(start+2,GlitchFx.EFFECTS.length);i++){
@@ -669,10 +726,7 @@ public class MainActivity extends Activity {
                     FrameLayout.LayoutParams marker=new FrameLayout.LayoutParams(dp(28),dp(28),Gravity.TOP|Gravity.RIGHT);
                     selectedMark.setGravity(Gravity.CENTER);tile.addView(selectedMark,marker);
                 }
-                tile.setOnClickListener(view->{
-                    if(chosen==30)glitchTab=2; // Reveal the rune color wheel immediately.
-                    glitchChange(()->currentGlitchLayer().type=chosen);
-                });
+                tile.setOnClickListener(view->chooseGlitchPaintBrush(chosen));
                 LinearLayout.LayoutParams bounds=new LinearLayout.LayoutParams(0,dp(130),1);
                 bounds.setMargins(dp(3),dp(3),dp(3),dp(3));
                 tiles.addView(tile,bounds);
@@ -719,7 +773,7 @@ public class MainActivity extends Activity {
             for(int i=st;i<Math.min(st+2,GlitchFx.PRESETS.length);i++){
                 final int ix=i;
                 addFlexButton(line,GlitchFx.PRESETS[i],
-                    ()->glitchChange(()->state.glitch=GlitchFx.preset(ix)),false);
+                    ()->selectGlitchPreset(ix),false);
             }
             panel.addView(line);gap(panel,dp(2));
         }
@@ -819,19 +873,52 @@ public class MainActivity extends Activity {
         panel.addView(text("Center and background masks are geometric ellipse selections, NOT AI subject segmentation. Brush masks let you select image areas directly.",11,MUTED,false));
     }
     private void glitchBrush(LinearLayout panel){
-        glitchLabel(panel,"PAINT THE GLITCH INTO SELECTED REGIONS");
+        glitchLabel(panel,"PAINT THE SELECTED EFFECT · ONE FINGER");
+        if(state.glitch.layers.isEmpty()){
+            panel.addView(text("Choose an effect in Effects first. Then paint with your finger.",14,CYAN,true));
+            return;
+        }
+        GlitchFx.Layer active=currentGlitchLayer();
+        panel.addView(text("Selected: "+GlitchFx.EFFECTS[active.type],14,WHITE,true));
+        gap(panel,6);
         LinearLayout actions=row();
-        addFlexButton(actions,glitchBrushMode?"✓ STOP PAINTING":"✎ START PAINTING",()->{
-            if(state.glitch.mask!=3){push();state.glitch.mask=3;}
-            glitchBrushMode=!glitchBrushMode;requestGlitchRender();showGlitchLab();
-        },true);
-        addFlexButton(actions,"ERASE BRUSH MASK",()->glitchChange(()->state.glitch.brush.clear()),false);
+        addFlexButton(actions,glitchEraseMode?"✎ BRUSH":"✎ PAINT",()->{
+            glitchEraseMode=false;glitchBrushMode=true;showGlitchLab();
+        },!glitchEraseMode);
+        addFlexButton(actions,glitchEraseMode?"● ERASER ACTIVE":"⌫ ERASE",()->{
+            glitchEraseMode=true;glitchBrushMode=true;showGlitchLab();
+        },glitchEraseMode);
         panel.addView(actions);
-        glitchSeek(panel,"Brush radius",state.glitch.brushRadius,v->state.glitch.brushRadius=Math.max(2,v));
-        panel.addView(text("After starting, drag a finger over the image. Only brushed areas receive glitch effects. Existing photo annotations remain separate.",11,MUTED,false));
+        glitchSeek(panel,"Brush size",active.brushSize,v->{
+            for(GlitchFx.Layer layer:state.glitch.layers){
+                if(layer==active || (active.paintGroup!=0 && layer.paintGroup==active.paintGroup))
+                    layer.brushSize=Math.max(2,v);
+            }
+        });
+        LinearLayout extra=row();
+        addFlexButton(extra,"⊞ FILL WHOLE IMAGE",()->new AlertDialog.Builder(this)
+            .setTitle("Apply to entire photo?")
+            .setMessage("This is optional. Painting remains the default.")
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Apply",(d,w)->glitchChange(()->{
+                GlitchFx.Layer layer=currentGlitchLayer();
+                for(GlitchFx.Layer l:state.glitch.layers)
+                    if(l==layer || (layer.paintGroup!=0 && l.paintGroup==layer.paintGroup)){
+                        l.paintedOnly=false;l.marks.clear();
+                    }
+            })).show(),false);
+        addFlexButton(extra,"CLEAR BRUSH STROKES",()->glitchChange(()->{
+            GlitchFx.Layer layer=currentGlitchLayer();
+            for(GlitchFx.Layer l:state.glitch.layers)
+                if(l==layer || (layer.paintGroup!=0 && l.paintGroup==layer.paintGroup))
+                    l.marks.clear();
+        }),false);
+        panel.addView(extra);
+        gap(panel,5);
+        panel.addView(text("ONE finger paints or erases. TWO fingers pinch to zoom and pan. Effects are saved per layer, so switching brushes preserves prior strokes.",12,CYAN,false));
     }
     private void glitchLayers(LinearLayout panel){
-        glitchLabel(panel,"NON-DESTRUCTIVE EFFECT STACK  •  MAX 6");
+        glitchLabel(panel,"INDEPENDENT PAINTED EFFECTS · MAX "+GlitchFx.MAX_LAYERS);
         for(int i=0;i<state.glitch.layers.size();i++){
             final int ix=i;
             GlitchFx.Layer layer=state.glitch.layers.get(i);
@@ -842,11 +929,12 @@ public class MainActivity extends Activity {
         }
         LinearLayout btns=row();
         addFlexButton(btns,"＋ ADD LAYER",()->{
-            if(state.glitch.layers.size()>=GlitchFx.MAX_LAYERS){toast("Maximum six effects");return;}
+            if(state.glitch.layers.size()>=GlitchFx.MAX_LAYERS){toast("Maximum "+GlitchFx.MAX_LAYERS+" layers");return;}
             glitchChange(()->{
                 GlitchFx.Layer l=new GlitchFx.Layer();
                 l.type=(state.glitch.layers.size()+1)%GlitchFx.EFFECTS.length;
                 l.seed=2026+state.glitch.layers.size()*341;
+                l.paintedOnly=true;l.paintGroup=nextPaintGroup();
                 state.glitch.layers.add(l);
                 state.glitch.active=state.glitch.layers.size()-1;
             });
@@ -900,6 +988,14 @@ public class MainActivity extends Activity {
                 o.put("direction",layer.direction);o.put("sortKey",layer.sortKey);o.put("opacity",layer.opacity);
                 o.put("blend",layer.blend);o.put("seed",layer.seed);
                 o.put("runeColor",layer.runeColor);o.put("phase",layer.phase);o.put("runeSpeed",layer.runeSpeed);
+                o.put("paintedOnly",layer.paintedOnly);o.put("brushSize",layer.brushSize);
+                o.put("paintGroup",layer.paintGroup);
+                JSONArray marks=new JSONArray();
+                for(GlitchFx.PaintMark p:layer.marks){
+                    JSONArray dab=new JSONArray();dab.put(p.x);dab.put(p.y);dab.put(p.erase);
+                    marks.put(dab);
+                }
+                o.put("paintMarks",marks);
                 a.put(o);
             }
             root.put("layers",a);
@@ -928,6 +1024,14 @@ public class MainActivity extends Activity {
             l.seed=o.optLong("seed",2026);
             l.runeColor=o.optInt("runeColor",0xFF6DFFCB);
             l.phase=o.optInt("phase",0);l.runeSpeed=o.optInt("runeSpeed",55);
+            l.paintedOnly=o.optBoolean("paintedOnly",false);
+            l.brushSize=o.optInt("brushSize",7);l.paintGroup=o.optInt("paintGroup",0);
+            JSONArray marks=o.optJSONArray("paintMarks");
+            if(marks!=null)for(int n=0;n<Math.min(6000,marks.length());n++){
+                JSONArray m=marks.getJSONArray(n);
+                l.marks.add(new GlitchFx.PaintMark((float)m.getDouble(0),
+                    (float)m.getDouble(1),m.optBoolean(2,false)));
+            }
             c.layers.add(l);
         }
         JSONArray pts=root.optJSONArray("brush");
@@ -1002,7 +1106,7 @@ public class MainActivity extends Activity {
     }
 
     private void showStudio() {
-        inGlitchLab=false;glitchBrushMode=false;glitchCompare=false;
+        inGlitchLab=false;glitchBrushMode=false;glitchCompare=false;canvasExpanded=false;
         requestGlitchRender();
         if(source==null){showHome();return;}
         LinearLayout root=column();root.setBackgroundColor(0xFF0B0E20);
@@ -1171,7 +1275,12 @@ public class MainActivity extends Activity {
                 .append(',').append(layer.direction).append(',').append(layer.sortKey).append(',').append(layer.opacity)
                 .append(',').append(layer.seed).append(',').append(layer.blend)
                 .append(',').append(layer.runeColor).append(',').append(layer.phase)
-                .append(',').append(layer.runeSpeed);
+                .append(',').append(layer.runeSpeed)
+                .append(',').append(layer.paintedOnly).append(',').append(layer.brushSize)
+                .append(',').append(layer.paintGroup).append(',').append(layer.marks.size());
+            for(GlitchFx.PaintMark m:layer.marks)
+                key.append(':').append((int)(m.x*10000)).append(',')
+                    .append((int)(m.y*10000)).append(m.erase?'E':'P');
         }
         for(GlitchFx.Point pt:state.glitch.brush)
             key.append(':').append((int)(pt.x*1000)).append(',').append((int)(pt.y*1000));
