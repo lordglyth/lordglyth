@@ -1,4 +1,4 @@
-# BlendCraft v1.6.0 — PAINTABLE Glitch Lab + Expanded Canvas
+# BlendCraft v1.7.0 — PAINTABLE Glitch Lab + Expanded Canvas
 
 This release corrects the earlier interaction mistake. Selecting one of the 31 glitch effects now **arms its paint brush**, it does not apply the effect to the whole image. The selected brush automatically opens a larger painting workspace with minimal controls.
 
@@ -28,10 +28,22 @@ The **Presets** tab also loads the chosen preset into a grouped paint brush, rat
 Animated GIF and MP4 encoding, AI background subject masking, desktop browser support, and live paid-Premium entitlement verification are still not available.
 
 ## Android builds
-- Play bundle: package com.snoplay.blendcraft, Android API 36, versionCode **8**.
+- Play bundle: package com.snoplay.blendcraft, Android API 36, versionCode **9**.
 - SnoPlay APK: package com.snoplay.blendcraft.snoplay, Android API 36, versionCode **8**.
 - The owner's **existing** private PKCS#12 signing key must be reused for production packages. This key MUST NOT be committed to public GitHub.
 - Continuous integration tests effect selection as a no-op, per-layer painted masks, erasing, re-painting, undo/deep-copy behavior, original integrity, all 31 algorithms, runic shift and seeded reproducibility.
 - Algorithm regression tests and compilation do not substitute for an actual physical phone UI test.
 
 Copyright © 2026 SnoPlay. All rights reserved.
+
+## v1.7.0: Multi-Brush and Touch Precision Patch
+
+- Dedicated source-to-output coordinate mapping prevents brush placement drifting on square/portrait crops or framed screenshots, including after FIT/FILL/pan/zoom.
+- Each newly selected effect is independently brush-painted; prior painted layers stay intact. Existing layers are accessible from a LAYERS shortcut even while Canvas is expanded.
+- Brush interpolation is sampled in original image pixels, with proportional spacing to avoid thousands of redundant dabs that blocked effect rendering.
+- An immediate visible stroke overlay and correctly scaled brush outline track the finger while the effect renderer works on a capped-size preview.
+- Two-finger pinch zoom anchors the pixel beneath your fingers while moving, instead of jumping relative to the viewport center.
+- Automated tests cover touch positions for landscape/portrait crops, framed screenshots, viewport pan/zoom, mask independence and undo.
+- Original source remains untouched; full-size static exports use the stored per-effect masks and retain the mandatory free watermark.
+
+This build has automated Java pixel and coordinate tests and Android compiler checks. Touch behavior must also be confirmed on the physical phone.
