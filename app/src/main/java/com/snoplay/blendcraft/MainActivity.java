@@ -1094,7 +1094,8 @@ public class MainActivity extends Activity {
         c.restore();
     }
     private void artwork(Canvas c,int w,int h) {
-        c.drawColor(BG);
+        if("Screenshot".equals(mode))c.drawColor(BG);
+        else c.drawColor(Color.TRANSPARENT,android.graphics.PorterDuff.Mode.CLEAR);
         Bitmap bm=glitchBitmapForRender();
         if("Screenshot".equals(mode)){
             int[][] gradients={
@@ -1189,7 +1190,7 @@ public class MainActivity extends Activity {
     }
     private class Preview extends View {
         float left,top,scaledW,scaledH;
-        Preview(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
+        Preview(){super(MainActivity.this);/* Allow Android's GPU Canvas compositor to scale the result. */}
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             int w=outputWidth(),h=outputHeight();
@@ -1257,32 +1258,110 @@ public class MainActivity extends Activity {
         Bitmap result=Bitmap.createBitmap(outputWidth(),outputHeight(),Bitmap.Config.ARGB_8888);
         Canvas c=new Canvas(result);artwork(c,result.getWidth(),result.getHeight());return result;
     }
-    private void save(boolean share) {
-        try {
-            Bitmap bitmap=exportBitmap();
-            ContentValues cv=new ContentValues();
-            String name="BlendCraft_"+System.currentTimeMillis()+".png";
-            cv.put(MediaStore.Images.Media.DISPLAY_NAME,name);
-            cv.put(MediaStore.Images.Media.MIME_TYPE,"image/png");
-            cv.put(MediaStore.Images.Media.RELATIVE_PATH,"Pictures/BlendCraft");
-            cv.put(MediaStore.Images.Media.IS_PENDING,1);
-            Uri uri=getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,cv);
-            if(uri==null)throw new Exception("Media library unavailable");
+    private void save(boolean share){save(share,"png");}
+    private void save(boolean share,String format){
+        String ext=format.toLowerCase(Locale.ROOT);
+        if(!ext.equals("png") && !ext.equals("jpg") && !ext.equals("webp"))ext="png";
+        final String finalExt=ext;
+        final String mime=ext.equals("jpg")?"image/jpeg":ext.equals("webp")?"image/webp":"image/png";
+        final Bitmap.CompressFormat compression=ext.equals("jpg")?Bitmap.CompressFormat.JPEG:
+            ext.equals("webp")?(Build.VERSION.SDK_INT>=30?Bitmap.CompressFormat.WEBP_LOSSLESS:
+                Bitmap.CompressFormat.WEBP):Bitmap.CompressFormat.PNG;
+        if(ext.equals("webp") && Build.VERSION.SDK_INT<30){
+            new AlertDialog.Builder(this)
+                .setTitle("WebP export")
+                .setMessage("This Android version only supports lossy WebP. Choose PNG for lossless quality.")
+                .setNegativeButton("Cancel",null)
+                .setPositiveButton("Export WebP",(dialog,which)->doExport(share,finalExt,mime,compression))
+                .show();
+        }else doExport(share,finalExt,mime,compression);
+    }
+    private void doExport(boolean share,String ext,String mime,Bitmap.CompressFormat compression){
+        toast("Rendering original-resolution image…");
+        // Keep the UI responsive during expensive pixel sorting and high-res compression.
+        final int width=outputWidth(),height=outputHeight();
+        final Bitmap snapshot=rotated();
+        final State exportState=state.copy();
+        final boolean wasCompare=glitchCompare;
+        // No mutable editor state may be accessed from the export worker.
+        // A clone of the drawing state is installed only after the worker returns.
+        glitchWorkers.submit(()->{
+            try {
+                // The existing renderer includes captions, screenshot framing,
+                // annotations and the non-negotiable Free watermark.
+                // Export on UI for Canvas state consistency after offscreen glitch pixels are ready.
+                final Bitmap glitchResult=exportState.glitch.enabled()
+                    ?GlitchFx.render(snapshot,exportState.glitch):snapshot;
+                mainHandler.post(()->{
+                    try {
+                        // Copy the existing state and cache just for the one synchronous Canvas composite.
+                        final State prevState=state;
+                        final Bitmap prevCache=glitchCache;
+                        final String prevKey=glitchCacheKey;
+                        final boolean prevCompare=glitchCompare;
+                        try{
+                            state=exportState;
+                            glitchCompare=false;
+                            glitchCache=glitchResult;
+                            glitchCacheKey=glitchSignature();
+                            Bitmap bitmap=exportBitmap();
+                            saveEncodedBitmap(bitmap,share,ext,mime,compression);
+                        }finally{
+                            state=prevState;
+                            glitchCompare=prevCompare;
+                            glitchCache=prevCache;
+                            glitchCacheKey=prevKey;
+                            if(preview!=null)preview.invalidate();
+                        }
+                    }catch(Exception err){
+                        new AlertDialog.Builder(this).setTitle("Export failed")
+                            .setMessage(err.getMessage()).setPositiveButton("OK",null).show();
+                    }
+                });
+            }catch(Exception error){
+                mainHandler.post(()->new AlertDialog.Builder(this).setTitle("Export failed")
+                    .setMessage(error.getMessage()).setPositiveButton("OK",null).show());
+            }
+        });
+    }
+    private void saveEncodedBitmap(Bitmap bitmap,boolean share,String ext,String mime,Bitmap.CompressFormat compression)throws Exception {
+        ContentValues cv=new ContentValues();
+        String filename="BlendCraft_"+System.currentTimeMillis()+"."+ext;
+        cv.put(MediaStore.Images.Media.DISPLAY_NAME,filename);
+        cv.put(MediaStore.Images.Media.MIME_TYPE,mime);
+        cv.put(MediaStore.Images.Media.RELATIVE_PATH,"Pictures/BlendCraft");
+        cv.put(MediaStore.Images.Media.IS_PENDING,1);
+        Uri uri=getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,cv);
+        if(uri==null)throw new Exception("Media library unavailable");
+        try{
+            // JPG has no transparency; explicitly flatten against white.
+            Bitmap encoded=bitmap;
+            if(ext.equals("jpg")){
+                encoded=Bitmap.createBitmap(bitmap.getWidth(),bitmap.getHeight(),Bitmap.Config.ARGB_8888);
+                Canvas flat=new Canvas(encoded);
+                flat.drawColor(Color.WHITE);
+                flat.drawBitmap(bitmap,0,0,new Paint(3));
+            }
             try(OutputStream stream=getContentResolver().openOutputStream(uri)){
-                if(stream==null || !bitmap.compress(Bitmap.CompressFormat.PNG,100,stream))
-                    throw new Exception("PNG encoder failed");
-            } catch(Exception ex){getContentResolver().delete(uri,null,null);throw ex;}
-            cv.clear();cv.put(MediaStore.Images.Media.IS_PENDING,0);
-            getContentResolver().update(uri,cv,null,null);
+                if(stream==null || !encoded.compress(compression,ext.equals("jpg")?95:100,stream))
+                    throw new Exception("Encoder failed");
+            }
+            if(encoded!=bitmap)encoded.recycle();
+        }catch(Exception ex){
+            getContentResolver().delete(uri,null,null);
             bitmap.recycle();
-            addRecent(uri);
-            if(share){
-                Intent i=new Intent(Intent.ACTION_SEND);i.setType("image/png");
-                i.putExtra(Intent.EXTRA_STREAM,uri);i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                startActivity(Intent.createChooser(i,"Share BlendCraft creation"));
-            }else toast("Saved to Pictures/BlendCraft");
-        }catch(Exception e){new AlertDialog.Builder(this).setTitle("Export failed")
-            .setMessage(e.getMessage()).setPositiveButton("OK",null).show();}
+            throw ex;
+        }
+        bitmap.recycle();
+        cv.clear();cv.put(MediaStore.Images.Media.IS_PENDING,0);
+        getContentResolver().update(uri,cv,null,null);
+        addRecent(uri);
+        if(share){
+            Intent intent=new Intent(Intent.ACTION_SEND);
+            intent.setType(mime);intent.putExtra(Intent.EXTRA_STREAM,uri);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(intent,"Share BlendCraft creation"));
+        }else toast("Saved "+ext.toUpperCase(Locale.ROOT)+" in Pictures/BlendCraft");
     }
     private void addRecent(Uri uri) {
         try {
