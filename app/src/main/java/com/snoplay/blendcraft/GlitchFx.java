@@ -26,14 +26,24 @@ public final class GlitchFx {
     };
     public static final String[] MASKS = {"Whole image","Center ellipse","Background (outside center)","Brush-painted area"};
     public static final String[] BLENDS = {"Normal","Screen","Additive","Multiply"};
-    public static final int MAX_LAYERS = 6;
+    public static final int MAX_LAYERS = 12;
     public static class Point {
         public float x,y;
         Point(float xx,float yy){x=xx;y=yy;}
         Point copy(){return new Point(x,y);}
     }
+    /** A brush mark is stored in source-normalized coordinates for resolution-safe exports. */
+    public static class PaintMark {
+        public float x,y;
+        public boolean erase;
+        PaintMark(float x,float y,boolean erase){this.x=x;this.y=y;this.erase=erase;}
+        PaintMark copy(){return new PaintMark(x,y,erase);}
+    }
     public static class Layer {
         public int type=0, intensity=65, scale=40, threshold=40, direction=0, sortKey=0, opacity=100, blend=0;
+        public boolean paintedOnly=false;
+        public int brushSize=7,paintGroup=0;
+        public ArrayList<PaintMark> marks=new ArrayList<>();
         public int runeColor=0xFF6DFFCB, phase=0, runeSpeed=55;
         public long seed=2026;
         public Layer copy(){
@@ -41,6 +51,8 @@ public final class GlitchFx {
             l.type=type;l.intensity=intensity;l.scale=scale;l.threshold=threshold;
             l.direction=direction;l.sortKey=sortKey;l.opacity=opacity;l.blend=blend;l.seed=seed;
             l.runeColor=runeColor;l.phase=phase;l.runeSpeed=runeSpeed;
+            l.paintedOnly=paintedOnly;l.brushSize=brushSize;l.paintGroup=paintGroup;
+            for(PaintMark p:marks)l.marks.add(p.copy());
             return l;
         }
     }
@@ -82,9 +94,17 @@ public final class GlitchFx {
             throw new IllegalArgumentException("Maximum Glitch Lab image size is 20 megapixels");
         int[] image=new int[w*h];
         source.getPixels(image,0,w,0,0,w,h);
-        float[] mask=makeMask(w,h,config);
+        float[] globalMask=null;
         for(Layer layer:config.layers) {
             if(layer.intensity<=0 || layer.opacity<=0)continue;
+            float[] mask;
+            if(layer.paintedOnly)mask=makeLayerPaintMask(w,h,layer);
+            else {
+                if(config.mask!=0 && globalMask==null)globalMask=makeMask(w,h,config);
+                mask=globalMask;
+            }
+            // Do not render algorithm at all when no paint marks were laid down.
+            if(layer.paintedOnly && layer.marks.isEmpty())continue;
             int[] changed=apply(image,w,h,layer);
             float opacity=clamp01(layer.opacity/100f)*clamp01(layer.intensity/100f);
             for(int i=0;i<image.length;i++){
@@ -96,6 +116,29 @@ public final class GlitchFx {
         Bitmap out=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
         out.setPixels(image,0,w,0,0,w,h);
         return out;
+    }
+    private static float[] makeLayerPaintMask(int w,int h,Layer layer){
+        float[] result=new float[w*h];
+        float radius=Math.max(2f,Math.min(w,h)*layer.brushSize/100f);
+        for(PaintMark dab:layer.marks){
+            float px=dab.x*w,py=dab.y*h;
+            int x0=Math.max(0,(int)(px-radius-1)),x1=Math.min(w-1,(int)(px+radius+1));
+            int y0=Math.max(0,(int)(py-radius-1)),y1=Math.min(h-1,(int)(py+radius+1));
+            for(int y=y0;y<=y1;y++){
+                float dy=y-py;
+                for(int x=x0;x<=x1;x++){
+                    float dx=x-px;
+                    float dist=(float)Math.sqrt(dx*dx+dy*dy)/radius;
+                    if(dist>=1)continue;
+                    float strength=clamp01((1-dist)*5.5f);
+                    int idx=y*w+x;
+                    // Chronological marks mean repainting after erasing is possible.
+                    if(dab.erase) result[idx]*=(1-strength);
+                    else result[idx]=Math.max(result[idx],strength);
+                }
+            }
+        }
+        return result;
     }
     private static float[] makeMask(int w,int h,Config c) {
         if(c.mask==0)return null;
