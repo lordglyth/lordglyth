@@ -36,6 +36,7 @@ jobs:
           javac -d "$RUNNER_TEMP/glitch-tests" \
             tests/stub/android/graphics/Bitmap.java \
             app/src/main/java/com/snoplay/blendcraft/GlitchFx.java \
+            app/src/main/java/com/snoplay/blendcraft/ExtraGlitches.java \
             tests/java/com/snoplay/blendcraft/GlitchFxTest.java
           java -cp "$RUNNER_TEMP/glitch-tests" com.snoplay.blendcraft.GlitchFxTest
       - name: Assemble free test editions
@@ -48,7 +49,7 @@ jobs:
       - name: Publish test APKs
         uses: actions/upload-artifact@v4
         with:
-          name: BlendCraft-v1.4.0-GlitchLab-API36-vc6-builds
+          name: BlendCraft-v1.5-GlitchLab-Effects-Builds
           path: |
             app/build/outputs/apk/play/debug/app-play-debug.apk
             app/build/outputs/apk/snoplay/debug/app-snoplay-debug.apk
