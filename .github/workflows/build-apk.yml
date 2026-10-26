@@ -40,11 +40,12 @@ jobs:
             tests/java/com/snoplay/blendcraft/GlitchFxTest.java
           java -cp "$RUNNER_TEMP/glitch-tests" com.snoplay.blendcraft.GlitchFxTest
       - name: Assemble free test editions
-        run: gradle --no-daemon :app:assemblePlayDebug :app:assembleSnoplayDebug :app:bundlePlayRelease --stacktrace
+        run: gradle --no-daemon :app:assemblePlayDebug :app:assembleSnoplayDebug :app:assembleSnoplayRelease :app:bundlePlayRelease --stacktrace
       - name: Verify both APKs exist
         run: |
           test -s app/build/outputs/apk/play/debug/app-play-debug.apk
           test -s app/build/outputs/apk/snoplay/debug/app-snoplay-debug.apk
+          test -s app/build/outputs/apk/snoplay/release/app-snoplay-release-unsigned.apk
           test -s app/build/outputs/bundle/playRelease/app-play-release.aab
       - name: Publish test APKs
         uses: actions/upload-artifact@v4
@@ -53,6 +54,7 @@ jobs:
           path: |
             app/build/outputs/apk/play/debug/app-play-debug.apk
             app/build/outputs/apk/snoplay/debug/app-snoplay-debug.apk
+            app/build/outputs/apk/snoplay/release/app-snoplay-release-unsigned.apk
             app/build/outputs/bundle/playRelease/app-play-release.aab
           if-no-files-found: error
           retention-days: 30
