@@ -29,12 +29,12 @@ public final class GlitchFx {
         Point copy(){return new Point(x,y);}
     }
     public static class Layer {
-        public int type=0, intensity=65, scale=40, threshold=95, direction=0, opacity=100, blend=0;
+        public int type=0, intensity=65, scale=40, threshold=95, direction=0, sortKey=0, opacity=100, blend=0;
         public long seed=2026;
         public Layer copy(){
             Layer l=new Layer();
             l.type=type;l.intensity=intensity;l.scale=scale;l.threshold=threshold;
-            l.direction=direction;l.opacity=opacity;l.blend=blend;l.seed=seed;
+            l.direction=direction;l.sortKey=sortKey;l.opacity=opacity;l.blend=blend;l.seed=seed;
             return l;
         }
     }
@@ -158,6 +158,7 @@ public final class GlitchFx {
         if(direction==1)rank=sat(p);
         else if(direction==2)rank=((p>>>16)&255);
         else if(direction==3)rank=((p>>>8)&255);
+        else if(direction==4)rank=(p&255);
         else rank=light(p);
         return (((long)rank)<<32)|(p&0xffffffffL);
     }
@@ -178,7 +179,7 @@ public final class GlitchFx {
                 long[] values=new long[count];
                 for(int i=0;i<count;i++){
                     int p=vertical?out[(start+i)*w+line]:out[line*w+start+i];
-                    values[i]=score(p,(l.scale/25)%4);
+                    values[i]=score(p,Math.floorMod(l.sortKey,5));
                 }
                 Arrays.sort(values);
                 for(int i=0;i<count;i++){
