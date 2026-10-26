@@ -72,7 +72,42 @@ public final class GlitchFxTest {
         GlitchFx.Config savedCurse=curse.copy();
         savedCurse.layers.get(0).runeColor=0xFF0000FF;
         check(curse.layers.get(0).runeColor==0xFFFF00D0,"color stored in deep-copied layer history");
+        // Picking a brush MUST NOT alter any pixel until the user paints.
+        GlitchFx.Config paintState=new GlitchFx.Config();
+        GlitchFx.Layer paintA=new GlitchFx.Layer();
+        paintA.type=7;paintA.scale=100;paintA.intensity=100;paintA.opacity=100;
+        paintA.paintedOnly=true;paintA.brushSize=6;paintA.paintGroup=1;
+        paintState.layers.add(paintA);
+        check(Arrays.equals(pristine,pixels(GlitchFx.render(source,paintState))),
+            "selecting effect without strokes leaves image unchanged");
+        paintA.marks.add(new GlitchFx.PaintMark(.5f,.5f,false));
+        int[] centerPaint=pixels(GlitchFx.render(source,paintState));
+        check(centerPaint[0]==pristine[0],"painting does not touch corner");
+        check(centerPaint[21*52+26]!=pristine[21*52+26],"painting affects center");
+        GlitchFx.Layer paintB=new GlitchFx.Layer();
+        paintB.type=4;paintB.scale=80;paintB.intensity=100;paintB.opacity=100;
+        paintB.paintedOnly=true;paintB.brushSize=6;paintB.paintGroup=2;paintB.seed=63;
+        paintB.marks.add(new GlitchFx.PaintMark(.12f,.13f,false));
+        paintState.layers.add(paintB);
+        int[] mixed=pixels(GlitchFx.render(source,paintState));
+        check(mixed[21*52+26]==centerPaint[21*52+26],
+            "painting a second effect elsewhere preserves first painted area");
+        check(mixed[6*52+6]!=pristine[6*52+6],
+            "second effect paints into independent location");
+        GlitchFx.Config undoPainting=paintState.copy();
+        paintA.marks.add(new GlitchFx.PaintMark(.5f,.5f,true));
+        int[] erased=pixels(GlitchFx.render(source,paintState));
+        check(erased[21*52+26]==pristine[21*52+26],
+            "eraser removes active layer mask at center");
+        check(erased[6*52+6]==mixed[6*52+6],
+            "eraser keeps other layer's strokes");
+        paintA.marks.add(new GlitchFx.PaintMark(.5f,.5f,false));
+        check(pixels(GlitchFx.render(source,paintState))[21*52+26]!=pristine[21*52+26],
+            "paint after erase restores effect");
+        check(undoPainting.layers.get(0).marks.size()==1,
+            "paint history uses deep copied strokes");
+        check(Arrays.equals(pristine,pixels(source)),"source remains unchanged by painted effects");
         check(GlitchFx.render(source,new GlitchFx.Config())==source,"no effects identity");
-        System.out.println("GlitchFx algorithm tests PASS (31 effects including shifting colored runes, 8 presets, sorting, seed, masks, source, alpha, history)");
+        System.out.println("GlitchFx algorithm tests PASS (31 effects, two independent paint brushes, erase and repaint, undo history, seeds and masks)");
     }
 }
