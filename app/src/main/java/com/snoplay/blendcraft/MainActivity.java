@@ -573,8 +573,8 @@ public class MainActivity extends Activity {
         GlitchFx.Layer active=state.glitch.layers.isEmpty()?null:currentGlitchLayer();
         // Selecting a brush is never an all-image effect application.
         if(active!=null && active.type==type && active.paintedOnly){
-            glitchEraseMode=false;glitchBrushMode=true;glitchTab=type==30?2:4;
-            canvasExpanded=type!=30;
+            glitchEraseMode=false;glitchBrushMode=true;glitchTab=4;
+            canvasExpanded=true;
             showGlitchLab();return;
         }
         if(state.glitch.layers.size()>=GlitchFx.MAX_LAYERS){
@@ -588,8 +588,8 @@ public class MainActivity extends Activity {
         layer.paintGroup=nextPaintGroup();
         state.glitch.layers.add(layer);
         state.glitch.active=state.glitch.layers.size()-1;
-        glitchBrushMode=true;glitchEraseMode=false;glitchTab=type==30?2:4;
-        canvasExpanded=type!=30;
+        glitchBrushMode=true;glitchEraseMode=false;glitchTab=4;
+        canvasExpanded=true;
         showGlitchLab();
     }
     private int nextPaintGroup(){
@@ -1071,6 +1071,19 @@ public class MainActivity extends Activity {
         toast("Glitch preset saved on this device");
         showGlitchLab();
     }
+    /**
+     * Glitch masks always live in the rotated source bitmap's coordinate space.
+     * The picture may be center-cropped or framed inside the output: do NOT
+     * pass the raw canvas position directly to GlitchFx.
+     */
+    private GlitchCoordinates effectMapper(){
+        Bitmap src=rotated();
+        if("Screenshot".equals(mode))
+            return GlitchCoordinates.screenshot(src.getWidth(),src.getHeight(),
+                outputWidth(),outputHeight());
+        return GlitchCoordinates.photo(src.getWidth(),src.getHeight(),outputRatio());
+    }
+
     private void resetCanvasView(){
         canvasZoom=1f;canvasPanX=0;canvasPanY=0;
         if(preview!=null)preview.invalidate();
@@ -1101,7 +1114,7 @@ public class MainActivity extends Activity {
         if(canvasExpanded){
             LinearLayout topActions=row();topActions.setPadding(dp(7),dp(3),dp(7),dp(1));
             addFlexButton(topActions,"‹ STUDIO",()->{canvasExpanded=false;showGlitchLab();},false);
-            addFlexButton(topActions,"FIT",()->resetCanvasView(),false);
+            addFlexButton(topActions,"LAYERS",()->{canvasExpanded=false;glitchTab=5;showGlitchLab();},false);
             addFlexButton(topActions,"FILL",()->fillCanvas(),false);
             addFlexButton(topActions,"SAVE ↗",()->save(false,"png"),true);
             root.addView(topActions);
@@ -1178,7 +1191,7 @@ public class MainActivity extends Activity {
             addFlexButton(quick,"⌫ ERASE",()->{
                 glitchEraseMode=true;glitchBrushMode=true;showGlitchLab();
             },glitchEraseMode);
-            addFlexButton(quick,"EFFECTS",()->{canvasExpanded=false;glitchTab=0;showGlitchLab();},false);
+            addFlexButton(quick,"SWITCH FX",()->{canvasExpanded=false;glitchTab=0;showGlitchLab();},false);
             addFlexButton(quick,"↶ UNDO",()->undoAction(),false);
         }else{
             addFlexButton(quick,"↶ UNDO",()->undoAction(),false);
@@ -1386,9 +1399,9 @@ public class MainActivity extends Activity {
                 // Preview uses an explicitly smaller derivative; export always renders the
                 // full original. This bounds preview latency and pixel array allocations.
                 int max=Math.max(input.getWidth(),input.getHeight());
-                Bitmap previewSource=max>1000
-                    ?Bitmap.createScaledBitmap(input,Math.max(1,Math.round(input.getWidth()*1000f/max)),
-                        Math.max(1,Math.round(input.getHeight()*1000f/max)),true)
+                Bitmap previewSource=max>850
+                    ?Bitmap.createScaledBitmap(input,Math.max(1,Math.round(input.getWidth()*850f/max)),
+                        Math.max(1,Math.round(input.getHeight()*850f/max)),true)
                     :input;
                 result=GlitchFx.render(previewSource,snapshot);
             }
