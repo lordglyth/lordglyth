@@ -29,7 +29,7 @@ public final class GlitchFx {
         Point copy(){return new Point(x,y);}
     }
     public static class Layer {
-        public int type=0, intensity=65, scale=40, threshold=95, direction=0, sortKey=0, opacity=100, blend=0;
+        public int type=0, intensity=65, scale=40, threshold=40, direction=0, sortKey=0, opacity=100, blend=0;
         public long seed=2026;
         public Layer copy(){
             Layer l=new Layer();
