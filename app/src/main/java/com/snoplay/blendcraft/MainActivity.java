@@ -1048,59 +1048,123 @@ public class MainActivity extends Activity {
         toast("Glitch preset saved on this device");
         showGlitchLab();
     }
+    private void resetCanvasView(){
+        canvasZoom=1f;canvasPanX=0;canvasPanY=0;
+        if(preview!=null)preview.invalidate();
+    }
+    private void zoomCanvasBy(float amount){
+        canvasZoom=Math.max(.75f,Math.min(8f,canvasZoom*amount));
+        if(preview!=null)preview.invalidate();
+    }
+    private void fillCanvas(){
+        if(preview==null)return;
+        float w=Math.max(1,preview.getWidth()-dp(12));
+        float h=Math.max(1,preview.getHeight()-dp(12));
+        float imageW=outputWidth(),imageH=outputHeight();
+        float fitted=Math.min(w/imageW,h/imageH);
+        float cover=Math.max(w/imageW,h/imageH);
+        canvasZoom=Math.max(1f,Math.min(8f,cover/Math.max(.0001f,fitted)));
+        canvasPanX=0;canvasPanY=0;
+        preview.invalidate();
+    }
     private void showGlitchLab(){
         if(source==null){showHome();return;}
         inGlitchLab=true;
         requestGlitchRender();
         armRuneAnimation(50);
-        LinearLayout root=column();root.setBackgroundColor(0xFF0A0B16);
+        LinearLayout root=column();
+        root.setBackgroundColor(0xFF090C1B);
 
-        LinearLayout titlebar=row();titlebar.setPadding(dp(12),dp(7),dp(12),dp(5));
-        Button back=actionButton("‹",()->{inGlitchLab=false;glitchBrushMode=false;showStudio();},false);
-        titlebar.addView(back,new LinearLayout.LayoutParams(dp(46),dp(46)));
-        LinearLayout textCol=column();textCol.setPadding(dp(12),0,0,0);
-        textCol.addView(kicker("BLENDCRAFT  /  EXPERIMENTAL STUDIO"));
-        textCol.addView(text("⚡ GLITCH LAB",23,0xFFD6B2FF,true));
-        titlebar.addView(textCol,new LinearLayout.LayoutParams(0,-2,1));
-        Button save=actionButton("SAVE ↗",()->save(false,"png"),true);
-        titlebar.addView(save,new LinearLayout.LayoutParams(dp(94),dp(46)));
-        root.addView(titlebar);
+        if(canvasExpanded){
+            LinearLayout topActions=row();topActions.setPadding(dp(7),dp(3),dp(7),dp(1));
+            addFlexButton(topActions,"‹ STUDIO",()->{canvasExpanded=false;showGlitchLab();},false);
+            addFlexButton(topActions,"FIT",()->resetCanvasView(),false);
+            addFlexButton(topActions,"FILL",()->fillCanvas(),false);
+            addFlexButton(topActions,"SAVE ↗",()->save(false,"png"),true);
+            root.addView(topActions);
+        }else{
+            LinearLayout titlebar=row();
+            titlebar.setPadding(dp(10),dp(4),dp(10),dp(3));
+            Button back=actionButton("‹",()->{
+                inGlitchLab=false;glitchBrushMode=false;canvasExpanded=false;showStudio();
+            },false);
+            titlebar.addView(back,new LinearLayout.LayoutParams(dp(42),dp(43)));
+            LinearLayout title=column();title.setPadding(dp(10),0,0,0);
+            title.addView(kicker("BLENDCRAFT / LIVE PAINT EDITOR"));
+            title.addView(text("⚡ GLITCH LAB",19,0xFFD6B2FF,true));
+            titlebar.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+            Button big=actionButton("⤢ CANVAS",()->{canvasExpanded=true;showGlitchLab();},false);
+            big.setTextSize(11);
+            titlebar.addView(big,new LinearLayout.LayoutParams(dp(104),dp(42)));
+            Button save=actionButton("SAVE",()->save(false,"png"),true);
+            LinearLayout.LayoutParams saveParams=new LinearLayout.LayoutParams(dp(74),dp(42));
+            saveParams.setMargins(dp(5),0,0,0);titlebar.addView(save,saveParams);
+            root.addView(titlebar);
+        }
 
-        FrameLayout canvas=new FrameLayout(this);canvas.setBackgroundColor(0xFF101326);
+        FrameLayout canvas=new FrameLayout(this);
+        canvas.setBackgroundColor(0xFF101326);
         preview=new Preview();
         canvas.addView(preview,new FrameLayout.LayoutParams(-1,-1));
         root.addView(canvas,new LinearLayout.LayoutParams(-1,0,1));
 
-        LinearLayout status=row();status.setPadding(dp(13),dp(5),dp(13),dp(5));
-        TextView info=text(glitchWorking?"◌  RENDERING EFFECTS…":glitchCompare?"◯  ORIGINAL COMPARISON":"●  GLITCH PREVIEW",10,CYAN,true);
-        status.addView(info,new LinearLayout.LayoutParams(0,dp(25),1));
-        status.addView(text(state.glitch.layers.size()+" ACTIVE LAYER(S)",10,MUTED,true));
-        root.addView(status);
+        // Zoom is always available, even when controls have been collapsed.
+        LinearLayout canvasTools=row();
+        canvasTools.setPadding(dp(7),dp(3),dp(7),dp(3));
+        addFlexButton(canvasTools,"− ZOOM",()->zoomCanvasBy(1f/1.28f),false);
+        addFlexButton(canvasTools,"＋ ZOOM",()->zoomCanvasBy(1.28f),false);
+        addFlexButton(canvasTools,"FIT",()->resetCanvasView(),false);
+        addFlexButton(canvasTools,"FILL",()->fillCanvas(),false);
+        root.addView(canvasTools);
 
-        LinearLayout surface=column();surface.setPadding(dp(10),dp(8),dp(10),dp(5));
-        surface.setBackground(outlined(0xFF161A31,0xFF444264,21));
-        glitchTabs(surface);
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(false);
-        scroll.setVerticalScrollBarEnabled(false);
-        LinearLayout panel=column();panel.setPadding(dp(4),dp(3),dp(4),dp(3));
-        scroll.addView(panel);
-        if(glitchTab==0)glitchEffects(panel);
-        else if(glitchTab==1)glitchPresets(panel);
-        else if(glitchTab==2)glitchControls(panel);
-        else if(glitchTab==3)glitchMasks(panel);
-        else if(glitchTab==4)glitchBrush(panel);
-        else if(glitchTab==5)glitchLayers(panel);
-        else glitchExportPanel(panel);
-        surface.addView(scroll,new LinearLayout.LayoutParams(-1,dp(glitchTab==0?310:233)));
-        root.addView(surface);
+        if(!canvasExpanded) {
+            LinearLayout status=row();status.setPadding(dp(12),dp(3),dp(12),dp(3));
+            String instruction=glitchBrushMode
+                ? (glitchEraseMode?"⌫ ERASE ON IMAGE":"✎ PAINT ON IMAGE")
+                : "SELECT A BRUSH FROM EFFECTS";
+            TextView statusText=text(instruction,11,CYAN,true);
+            status.addView(statusText,new LinearLayout.LayoutParams(0,dp(19),1));
+            status.addView(text(state.glitch.layers.size()+" LAYERS",10,MUTED,true));
+            root.addView(status);
 
-        LinearLayout quick=row();quick.setPadding(dp(7),dp(7),dp(7),dp(8));
-        addFlexButton(quick,"↶ UNDO",()->undoAction(),false);
-        addFlexButton(quick,"↷ REDO",()->redoAction(),false);
-        addFlexButton(quick,glitchCompare?"EDITED":"BEFORE",()->{
-            glitchCompare=!glitchCompare;showGlitchLab();
-        },false);
-        addFlexButton(quick,"↓ EXPORT",()->save(false,"png"),true);
+            LinearLayout surface=column();
+            surface.setPadding(dp(8),dp(4),dp(8),dp(4));
+            surface.setBackground(outlined(0xFF161A31,0xFF434568,17));
+            glitchTabs(surface);
+            ScrollView scroll=new ScrollView(this);
+            scroll.setVerticalScrollBarEnabled(false);
+            LinearLayout panel=column();
+            panel.setPadding(dp(3),dp(3),dp(3),dp(3));
+            scroll.addView(panel);
+            if(glitchTab==0)glitchEffects(panel);
+            else if(glitchTab==1)glitchPresets(panel);
+            else if(glitchTab==2)glitchControls(panel);
+            else if(glitchTab==3)glitchMasks(panel);
+            else if(glitchTab==4)glitchBrush(panel);
+            else if(glitchTab==5)glitchLayers(panel);
+            else glitchExportPanel(panel);
+            surface.addView(scroll,new LinearLayout.LayoutParams(-1,dp(glitchTab==0?170:133)));
+            root.addView(surface);
+        }
+
+        LinearLayout quick=row();quick.setPadding(dp(7),dp(4),dp(7),dp(5));
+        if(canvasExpanded){
+            addFlexButton(quick,glitchEraseMode?"✎ PAINT":"✎ PAINT",()->{
+                glitchEraseMode=false;glitchBrushMode=true;showGlitchLab();
+            },!glitchEraseMode);
+            addFlexButton(quick,"⌫ ERASE",()->{
+                glitchEraseMode=true;glitchBrushMode=true;showGlitchLab();
+            },glitchEraseMode);
+            addFlexButton(quick,"EFFECTS",()->{canvasExpanded=false;glitchTab=0;showGlitchLab();},false);
+            addFlexButton(quick,"↶ UNDO",()->undoAction(),false);
+        }else{
+            addFlexButton(quick,"↶ UNDO",()->undoAction(),false);
+            addFlexButton(quick,"↷ REDO",()->redoAction(),false);
+            addFlexButton(quick,glitchCompare?"EDITED":"BEFORE",()->{
+                glitchCompare=!glitchCompare;showGlitchLab();
+            },false);
+            addFlexButton(quick,"⤢ EXPAND",()->{canvasExpanded=true;showGlitchLab();},true);
+        }
         root.addView(quick);
         applySafeArea(root);setContentView(root);
     }
@@ -1459,65 +1523,139 @@ public class MainActivity extends Activity {
     }
     private class Preview extends View {
         float left,top,scaledW,scaledH;
-        Preview(){super(MainActivity.this);/* Allow Android's GPU Canvas compositor to scale the result. */}
-        @Override protected void onDraw(Canvas canvas) {
+        private boolean pinching=false,brushDown=false;
+        private float pinchStartDist=1f,pinchStartZoom=1f,midX,midY,startPanX,startPanY;
+        private float lastX,lastY,lastNX,lastNY,cursorX,cursorY;
+        private boolean cursorVisible=false;
+        private long lastRender=0;
+        Preview(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_HARDWARE,null);}
+        @Override protected void onDraw(Canvas canvas){
             super.onDraw(canvas);
             int w=outputWidth(),h=outputHeight();
-            Paint background=new Paint(3);
-            background.setShader(new LinearGradient(0,0,getWidth(),getHeight(),
+            Paint bg=new Paint(3);
+            bg.setShader(new LinearGradient(0,0,getWidth(),getHeight(),
                 new int[]{0xFF12162D,0xFF1C1D39,0xFF132D3E},null,Shader.TileMode.CLAMP));
-            canvas.drawRect(0,0,getWidth(),getHeight(),background);
-            background.setShader(null);
-            background.setColor(0x164F70AC);
-            for(int x=dp(12);x<getWidth();x+=dp(23)){
-                for(int y=dp(8);y<getHeight();y+=dp(23))
-                    canvas.drawCircle(x,y,dp(.65f),background);
-            }
-            float scale=Math.min((getWidth()-dp(32))/(float)w,(getHeight()-dp(30))/(float)h);
-            if(scale<=0)return;
+            canvas.drawRect(0,0,getWidth(),getHeight(),bg);
+            float fit=Math.min((getWidth()-dp(14))/(float)w,(getHeight()-dp(14))/(float)h);
+            if(fit<=0)return;
+            float scale=fit*canvasZoom;
             scaledW=w*scale;scaledH=h*scale;
-            left=(getWidth()-scaledW)/2;top=(getHeight()-scaledH)/2;
-            Paint shadow=new Paint(3);shadow.setColor(0xAA000000);
-            shadow.setShadowLayer(dp(18),0,dp(7),0xCC000008);
-            canvas.drawRoundRect(left,top,left+scaledW,top+scaledH,dp(4),dp(4),shadow);
+            left=(getWidth()-scaledW)/2+canvasPanX;
+            top=(getHeight()-scaledH)/2+canvasPanY;
+            canvas.save();
+            canvas.clipRect(0,0,getWidth(),getHeight());
+            Paint shadow=new Paint(3);shadow.setColor(0xD0000000);
+            shadow.setShadowLayer(dp(7),0,dp(3),0x99000000);
+            canvas.drawRect(left,top,left+scaledW,top+scaledH,shadow);
             canvas.save();canvas.translate(left,top);canvas.scale(scale,scale);
             artwork(canvas,w,h);canvas.restore();
             Paint border=new Paint(3);border.setStyle(Paint.Style.STROKE);
-            border.setStrokeWidth(dp(1.2f));border.setColor(0x995DEBDC);
+            border.setStrokeWidth(dp(1));border.setColor(0x995DEBDC);
             canvas.drawRect(left,top,left+scaledW,top+scaledH,border);
-            // Little editor-style alignment handles
-            Paint point=new Paint(3);point.setColor(CYAN);
-            float z=dp(4);
-            canvas.drawCircle(left,top,z,point);
-            canvas.drawCircle(left+scaledW,top,z,point);
-            canvas.drawCircle(left,top+scaledH,z,point);
-            canvas.drawCircle(left+scaledW,top+scaledH,z,point);
+            if(inGlitchLab && cursorVisible && glitchBrushMode && !state.glitch.layers.isEmpty()){
+                GlitchFx.Layer layer=currentGlitchLayer();
+                float radius=Math.min(scaledW,scaledH)*layer.brushSize/100f;
+                Paint cursor=new Paint(3);
+                cursor.setStyle(Paint.Style.STROKE);
+                cursor.setStrokeWidth(dp(2));
+                cursor.setColor(glitchEraseMode?0xFFFF8181:0xFF81FFDB);
+                canvas.drawCircle(cursorX,cursorY,Math.max(dp(5),radius),cursor);
+                cursor.setColor(Color.WHITE);
+                cursor.setStrokeWidth(dp(1));
+                canvas.drawCircle(cursorX,cursorY,dp(2),cursor);
+            }
+            canvas.restore();
         }
-        @Override public boolean onTouchEvent(MotionEvent event) {
-            int a=event.getActionMasked();
-            if(a!=MotionEvent.ACTION_DOWN && a!=MotionEvent.ACTION_MOVE && a!=MotionEvent.ACTION_UP)return true;
-            if(scaledW<=0 || scaledH<=0)return true;
-            float x=Math.max(0,Math.min(1,(event.getX()-left)/scaledW));
-            float y=Math.max(0,Math.min(1,(event.getY()-top)/scaledH));
-            if(inGlitchLab && glitchBrushMode) {
-                if(a==MotionEvent.ACTION_DOWN)push();
-                if(a==MotionEvent.ACTION_DOWN || a==MotionEvent.ACTION_MOVE) {
-                    if(state.glitch.brush.size()<10000)
-                        state.glitch.brush.add(new GlitchFx.Point(x,y));
-                    invalidate();
-                }
-                if(a==MotionEvent.ACTION_UP) {
-                    requestGlitchRender();
-                    invalidate();
-                }
+        private void dabTo(float nx,float ny){
+            float pxW=outputWidth(),pxH=outputHeight();
+            GlitchFx.Layer active=currentGlitchLayer();
+            float maxGap=Math.max(3,Math.min(pxW,pxH)*active.brushSize*.0025f);
+            float distance=(float)Math.hypot((nx-lastNX)*pxW,(ny-lastNY)*pxH);
+            int steps=Math.min(90,Math.max(1,(int)Math.ceil(distance/maxGap)));
+            float oldX=lastNX,oldY=lastNY;
+            for(int i=1;i<=steps;i++){
+                float t=i/(float)steps;
+                addGlitchBrushDab(oldX+(nx-oldX)*t,oldY+(ny-oldY)*t);
+            }
+            lastNX=nx;lastNY=ny;
+        }
+        @Override public boolean onTouchEvent(MotionEvent event){
+            int a=event.getActionMasked(),count=event.getPointerCount();
+            if(a==MotionEvent.ACTION_POINTER_DOWN && count>=2){
+                pinching=true;brushDown=false;cursorVisible=false;
+                pinchStartDist=(float)Math.hypot(event.getX(0)-event.getX(1),
+                    event.getY(0)-event.getY(1));
+                if(pinchStartDist<1)pinchStartDist=1;
+                pinchStartZoom=canvasZoom;
+                midX=(event.getX(0)+event.getX(1))*.5f;
+                midY=(event.getY(0)+event.getY(1))*.5f;
+                startPanX=canvasPanX;startPanY=canvasPanY;
+                invalidate();return true;
+            }
+            if(count>=2 && a==MotionEvent.ACTION_MOVE){
+                float distance=(float)Math.hypot(event.getX(0)-event.getX(1),
+                    event.getY(0)-event.getY(1));
+                canvasZoom=Math.max(.75f,Math.min(8f,pinchStartZoom*distance/pinchStartDist));
+                float centerX=(event.getX(0)+event.getX(1))*.5f;
+                float centerY=(event.getY(0)+event.getY(1))*.5f;
+                canvasPanX=startPanX+centerX-midX;
+                canvasPanY=startPanY+centerY-midY;
+                invalidate();return true;
+            }
+            if(a==MotionEvent.ACTION_POINTER_UP){
+                pinching=true;cursorVisible=false;invalidate();return true;
+            }
+            if(a==MotionEvent.ACTION_CANCEL){
+                cursorVisible=false;brushDown=false;pinching=false;
+                requestGlitchRender();invalidate();return true;
+            }
+            if(a==MotionEvent.ACTION_DOWN){
+                pinching=false;brushDown=false;
+                lastX=event.getX();lastY=event.getY();
+            }
+            if(pinching){
+                if(a==MotionEvent.ACTION_UP)pinching=false;
                 return true;
+            }
+            if(scaledW<=0 || scaledH<=0)return true;
+            float screenX=event.getX(),screenY=event.getY();
+            boolean inside=screenX>=left&&screenX<=left+scaledW
+                &&screenY>=top&&screenY<=top+scaledH;
+            float nx=Math.max(0,Math.min(1,(screenX-left)/scaledW));
+            float ny=Math.max(0,Math.min(1,(screenY-top)/scaledH));
+            if(inGlitchLab){
+                if(glitchBrushMode && !state.glitch.layers.isEmpty()){
+                    cursorX=screenX;cursorY=screenY;
+                    cursorVisible=inside;
+                    if(a==MotionEvent.ACTION_DOWN && inside){
+                        push();brushDown=true;lastNX=nx;lastNY=ny;
+                        addGlitchBrushDab(nx,ny);
+                    }else if(a==MotionEvent.ACTION_MOVE && brushDown && inside){
+                        dabTo(nx,ny);
+                    }
+                    if(a==MotionEvent.ACTION_UP){
+                        if(brushDown && inside)dabTo(nx,ny);
+                        cursorVisible=false;brushDown=false;
+                        requestGlitchRender();
+                    }else if(a==MotionEvent.ACTION_MOVE && brushDown){
+                        long now=android.os.SystemClock.uptimeMillis();
+                        if(now-lastRender>160 && !glitchWorking){
+                            requestGlitchRender();lastRender=now;
+                        }
+                    }
+                }else if(a==MotionEvent.ACTION_MOVE){
+                    canvasPanX+=screenX-lastX;canvasPanY+=screenY-lastY;
+                }
+                lastX=screenX;lastY=screenY;
+                invalidate();return true;
             }
             if(drawing){
                 if(a==MotionEvent.ACTION_DOWN){
                     push();activeStroke=new Stroke();activeStroke.color=INKS[inkIndex];
-                    activeStroke.coords.add(x);activeStroke.coords.add(y);state.strokes.add(activeStroke);
+                    activeStroke.coords.add(nx);activeStroke.coords.add(ny);
+                    state.strokes.add(activeStroke);
                 }else if(a==MotionEvent.ACTION_MOVE && activeStroke!=null){
-                    activeStroke.coords.add(x);activeStroke.coords.add(y);
+                    activeStroke.coords.add(nx);activeStroke.coords.add(ny);
                 }else if(a==MotionEvent.ACTION_UP)activeStroke=null;
             }
             invalidate();return true;
