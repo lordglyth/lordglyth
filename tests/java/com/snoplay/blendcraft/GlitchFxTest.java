@@ -55,7 +55,24 @@ public final class GlitchFxTest {
             check(config.layers.size()>0,"preset "+p+" exists");
             check(GlitchFx.render(source,config).getWidth()==52,"preset size "+p);
         }
+        check(GlitchFx.EFFECTS.length==31,"31 image effects registered");
+        check(ExtraGlitches.NAMES.length==21,"21 additional corruption effects");
+        GlitchFx.Config curse=new GlitchFx.Config();
+        GlitchFx.Layer rune=new GlitchFx.Layer();
+        rune.type=30;rune.intensity=100;rune.opacity=100;rune.scale=90;rune.runeColor=0xFF00FF00;
+        curse.layers.add(rune);
+        int[] runeFirst=pixels(GlitchFx.render(source,curse));
+        rune.phase=1;
+        int[] runeShifted=pixels(GlitchFx.render(source,curse));
+        check(!Arrays.equals(runeFirst,runeShifted),"shifting rune phase modifies real pixels");
+        rune.phase=0;rune.runeColor=0xFFFF00D0;
+        int[] runeRecolored=pixels(GlitchFx.render(source,curse));
+        check(!Arrays.equals(runeFirst,runeRecolored),"color wheel rune color changes effect");
+        check(Arrays.equals(pristine,pixels(source)),"runes never mutate source");
+        GlitchFx.Config savedCurse=curse.copy();
+        savedCurse.layers.get(0).runeColor=0xFF0000FF;
+        check(curse.layers.get(0).runeColor==0xFFFF00D0,"color stored in deep-copied layer history");
         check(GlitchFx.render(source,new GlitchFx.Config())==source,"no effects identity");
-        System.out.println("GlitchFx algorithm tests PASS (10 effects, 8 presets, sorting, seed, masks, source, alpha, history)");
+        System.out.println("GlitchFx algorithm tests PASS (31 effects including shifting colored runes, 8 presets, sorting, seed, masks, source, alpha, history)");
     }
 }
