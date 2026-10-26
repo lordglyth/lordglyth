@@ -1,32 +1,55 @@
-# BlendCraft for Android
-A real, offline-first Android image editor from SnoPlay.
+# BlendCraft v1.4.0 — Glitch Lab
 
-## What works in v1
-- Home screen with Photo, Screenshot and Meme studios
-- Import images from device using Android's document picker; accept image shares
-- Crop presets (original / square / portrait / story / landscape), rotate
-- Brightness, contrast and saturation adjustment
-- Meme captions, custom text, emojis, mandatory non-removable lower-right BlendCraft brand mark in every free export
-- Screenshot-ready gradient framing
-- Finger drawing annotations with multiple colors
-- Undo and redo during editing
-- Save full-size PNG to Pictures/BlendCraft and share using Android sharesheet
-- Recent creations browser for exported images
-- No account, no tracking, no API key, no ads, no internet permission
-- Free version watermark is drawn LAST by the central Canvas renderer, so both PNG exports and Android Share always include it
-- Branding control explains the free watermark but provides no disable, movement, opacity, resizing or text setting
+BlendCraft is SnoPlay's offline-first, native Android image editor (Java, Android SDK 36).
+**The Glitch Lab is integrated into the existing Home / Photo Lab / Screenshot Studio / Meme Studio workflow.** It does not launch a separate demo or replace other editing tools.
 
-## Build
-Requires JDK 17, Android SDK 35, Gradle 8.11.1.
-Run `gradle :app:assembleDebug`.
-An automated GitHub Actions workflow builds and uploads the APK on each push to the `blendcraft-android` branch. Download the `BlendCraft-debug-APK` artifact from Actions to install.
+## Original tools retained
+- File import and Android Share-to-BlendCraft
+- Photo editing (rotate, crop, color tuning), meme captions and overlay text
+- Screenshot presentation frames
+- Canvas annotations, editor undo/redo, My Creations gallery
+- Unremovable **BlendCraft Free** watermark in the lower-right corner of exported images
+- Saving and sharing edited images through Android MediaStore (Pictures/BlendCraft)
+- Existing saved image exports are not migrated or deleted by this update.
 
-## Scope
-This is a functioning starter editor, not the full enterprise BlendCraft design document.
-Not yet included: premium purchase processing and verified premium entitlements, AI captions, object/background removal, true multilayer editable project files, team collaboration, marketplace, subscription billing, animated/video export, or systemwide screen capture. For screenshots, use Android's built-in screenshot button and Share > BlendCraft.
+## Glitch Lab — functional in this build
+Ten actual, deterministic ARGB pixel processing algorithms in \`GlitchFx.java\`:
+1. Pixel Sort — true thresholded contiguous-window pixel sorting, horizontal/vertical and brightness/saturation/red/green/blue ranking
+2. RGB Split — displaced color channels and chromatic aberration
+3. Data Smear — seeded horizontal displacement strips
+4. VHS/CRT — scanlines, tracking offsets, flicker
+5. Signal Noise — independent seeded RGB grain
+6. Artifact Blocks — seeded tile displacement
+7. Wave Distortion — horizontal tear and vertical wobble
+8. Posterize — adjustable palette quantization
+9. Ghosting — shifted blended image echo
+10. Corrupt Streaks — seeded dragged pixel fragments
 
-## Premium billing plan
-The current APK is the **Free** edition, so the lower-right BlendCraft watermark is always applied. A normal PayPal.me link is not sufficient to securely verify purchases. Store-based billing (Google Play Billing) or an external checkout with backend purchase validation must be added before enabling watermark-free Premium. There is no hidden local premium toggle in this build.
+UI: **Effects, Presets, Controls, Masks, Brush, Layers, Export**. Controls include intensity, scale, threshold, direction, opacity, channel sort order, manual numeric seed and seed lock. Eight included presets are Signal Loss, Data Melt, Broken Neon, VHS Haunting, Cyber Static, Pixel Collapse, Corrupt Dream and Darkness Corruption. One user-generated custom preset can be saved and recalled locally.
 
-## License
-Copyright 2026 SnoPlay. All rights reserved.
+There are up to six composited effect layers with Normal, Screen, Additive and Multiply blend modes. Mask choices: entire image, center ellipse, outside-center, and paintable brush regions; brush radius is adjustable. Center ellipse is a **geometric approximation, not automatic AI subject segmentation**. Undo/redo deep-copies the image-editing state and glitch configuration. Original-versus-edited comparison is available as a toggle.
+
+The underlying imported source Bitmap remains unchanged. Previews are computed asynchronously on a worker thread and composited by Android's Canvas. The export path uses the same effect configuration and draws existing captions, annotations and mandatory free watermark **after** glitch processing.
+
+## Export
+- PNG: lossless, preserves transparency if the imported image contains it.
+- JPG: lossy at quality 95, explicitly composited against white.
+- WebP: lossless on Android 11+, otherwise user is warned that it is lossy.
+- Export resolution follows the imported bitmap's dimensions / selected crop (screenshot presentation intentionally uses a square canvas). No silent downsampling occurs.
+- Images greater than **12 megapixels** are rejected at import with a visible explanation rather than quietly resized. This memory guard is for low-memory Android devices.
+
+## Not present (do not advertise as completed)
+- Animated/keyframed glitches; GIF/MP4 export; adjustable animation speed and frequency
+- AI subject segmentation or automatic background removal
+- Multi-branch project saving, multi-slot custom preset library or cloud sync
+- Desktop-browser/Web edition of Glitch Lab (the existing product is Android-native)
+- Verified purchase entitlement / working Premium checkout and watermark removal
+- Comprehensive on-device UI, memory-stress and MediaStore export instrumentation tests (still required before public release)
+
+## Automated verification
+\`.github/workflows/build-apk.yml\` runs deterministic JVM tests using a minimal stand-in Android Bitmap to exercise all ten pixel operations, eight presets, both sorting directions, reproducible random seeds, brush masking, alpha retention, original integrity and undo/deep-copy behavior. GitHub Actions then compiles both Android variants and the Play release bundle (target SDK 36, version code 6).
+
+**Artifact signing:** The permanent private PKCS#12 signing key is **not** in this repository. Use the existing owner's stored keystore to sign production releases, and always increment \`versionCode\`. The Play edition is an AAB (\`com.snoplay.blendcraft\`), while the SnoPlay edition is an APK (\`com.snoplay.blendcraft.snoplay\`). Test APKs from GitHub Actions use ephemeral debug signing unless explicitly re-signed.
+
+## Licensing
+Copyright © 2026 SnoPlay. All rights reserved.
