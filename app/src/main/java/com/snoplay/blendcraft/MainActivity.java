@@ -669,7 +669,10 @@ public class MainActivity extends Activity {
                     FrameLayout.LayoutParams marker=new FrameLayout.LayoutParams(dp(28),dp(28),Gravity.TOP|Gravity.RIGHT);
                     selectedMark.setGravity(Gravity.CENTER);tile.addView(selectedMark,marker);
                 }
-                tile.setOnClickListener(view->glitchChange(()->currentGlitchLayer().type=chosen));
+                tile.setOnClickListener(view->{
+                    if(chosen==30)glitchTab=2; // Reveal the rune color wheel immediately.
+                    glitchChange(()->currentGlitchLayer().type=chosen);
+                });
                 LinearLayout.LayoutParams bounds=new LinearLayout.LayoutParams(0,dp(130),1);
                 bounds.setMargins(dp(3),dp(3),dp(3),dp(3));
                 tiles.addView(tile,bounds);
@@ -682,6 +685,11 @@ public class MainActivity extends Activity {
             panel.addView(tiles);
         }
         gap(panel,9);
+        if(!state.glitch.layers.isEmpty() && currentGlitchLayer().type==30){
+            Button glow=actionButton("🎨 OPEN SHIFTING RUNES COLOR WHEEL",()->chooseRuneColor(),true);
+            panel.addView(glow,new LinearLayout.LayoutParams(-1,dp(47)));
+            gap(panel,7);
+        }
         panel.addView(text("Thumbnails are generated from your imported image using the real effect algorithms. Pixel sorting, XOR, Zalgo, compression artifacts, and Shifting Runes Curse are all editable layers.",11,MUTED,false));
     }
     private void chooseRuneColor(){
