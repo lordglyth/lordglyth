@@ -525,6 +525,335 @@ public class MainActivity extends Activity {
         // Leave keyboard focus naturally before rebuilding inspector.
         showStudio();
     }
+
+    // The lab is an editor surface inside MainActivity: it shares source,
+    // undo/redo, caption overlay, watermark and the existing export pipeline.
+    private GlitchFx.Layer currentGlitchLayer(){
+        if(state.glitch.layers.isEmpty())state.glitch.layers.add(new GlitchFx.Layer());
+        state.glitch.active=Math.max(0,Math.min(state.glitch.active,state.glitch.layers.size()-1));
+        return state.glitch.layers.get(state.glitch.active);
+    }
+    private void glitchChange(Runnable r){
+        push();r.run();requestGlitchRender();showGlitchLab();
+    }
+    private void glitchSeek(LinearLayout parent,String title,int val,java.util.function.IntConsumer apply){
+        LinearLayout r=row();r.setPadding(dp(2),0,dp(2),0);
+        TextView label=text(title,12,0xFFD3D9EE,true);
+        r.addView(label,new LinearLayout.LayoutParams(dp(94),dp(42)));
+        SeekBar slider=new SeekBar(this);slider.setMax(100);slider.setProgress(val);
+        slider.setProgressTintList(android.content.res.ColorStateList.valueOf(LAVENDER));
+        slider.setThumbTintList(android.content.res.ColorStateList.valueOf(CYAN));
+        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar b,int n,boolean fromUser) {
+                if(fromUser)apply.accept(n);
+            }
+            public void onStartTrackingTouch(SeekBar b){push();}
+            public void onStopTrackingTouch(SeekBar b){showGlitchLab();}
+        });
+        r.addView(slider,new LinearLayout.LayoutParams(0,dp(43),1));
+        TextView value=text(val+"%",11,CYAN,true);
+        value.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+        r.addView(value,new LinearLayout.LayoutParams(dp(44),dp(42)));
+        parent.addView(r);
+    }
+    private void glitchLabel(LinearLayout p,String title){
+        TextView label=kicker(title);label.setTextColor(LAVENDER);
+        label.setPadding(dp(2),dp(4),0,dp(6));p.addView(label);
+    }
+    private void glitchTabs(LinearLayout dest){
+        String[] names={"Effects","Presets","Controls","Masks","Brush","Layers","Export"};
+        HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout strip=row();strip.setPadding(dp(2),dp(3),dp(2),dp(5));
+        for(int i=0;i<names.length;i++){
+            final int index=i;
+            Button b=button(names[i],()->{glitchTab=index;showGlitchLab();});
+            b.setTextSize(12);
+            b.setTextColor(i==glitchTab?BG:WHITE);
+            b.setBackground(i==glitchTab?gradient(0xFF99E8F4,0xFFC4A2FA,13):box(0xFF29304D,13));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(42));
+            lp.setMargins(dp(3),0,dp(3),0);strip.addView(b,lp);
+        }
+        scroll.addView(strip);dest.addView(scroll);
+    }
+    private void glitchEffects(LinearLayout panel){
+        glitchLabel(panel,"SELECT A REAL PIXEL EFFECT");
+        for(int start=0;start<GlitchFx.EFFECTS.length;start+=2){
+            LinearLayout line=row();
+            for(int i=start;i<Math.min(start+2,GlitchFx.EFFECTS.length);i++){
+                final int which=i;
+                Button btn=actionButton((currentGlitchLayer().type==i?"● ":"✧ ")+GlitchFx.EFFECTS[i],
+                    ()->glitchChange(()->currentGlitchLayer().type=which),currentGlitchLayer().type==i);
+                btn.setTextSize(12);
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(42),1);
+                lp.setMargins(dp(3),dp(3),dp(3),dp(3));line.addView(btn,lp);
+            }
+            panel.addView(line);
+        }
+        panel.addView(text("Tip: Pixel Sort uses direction and threshold. Effects layer without flattening the original.",11,MUTED,false));
+    }
+    private void glitchPresets(LinearLayout panel){
+        glitchLabel(panel,"8 CURATED CORRUPTIONS");
+        for(int st=0;st<GlitchFx.PRESETS.length;st+=2){
+            LinearLayout line=row();
+            for(int i=st;i<Math.min(st+2,GlitchFx.PRESETS.length);i++){
+                final int ix=i;
+                addFlexButton(line,GlitchFx.PRESETS[i],
+                    ()->glitchChange(()->state.glitch=GlitchFx.preset(ix)),false);
+            }
+            panel.addView(line);gap(panel,dp(2));
+        }
+        gap(panel,10);
+        Button savePreset=actionButton("✦ SAVE MY PRESET",()->saveCustomGlitchPreset(),true);
+        panel.addView(savePreset,new LinearLayout.LayoutParams(-1,dp(44)));
+        gap(panel,7);
+        String json=getSharedPreferences("glitch_lab_presets",MODE_PRIVATE).getString("user_config","");
+        if(!json.isEmpty()){
+            Button restore=actionButton("↶ LOAD MY SAVED PRESET",()->{
+                try {
+                    GlitchFx.Config restored=decodeGlitch(json);
+                    glitchChange(()->state.glitch=restored);
+                }catch(Exception e){toast("Saved preset could not be read");}
+            },false);
+            panel.addView(restore,new LinearLayout.LayoutParams(-1,dp(44)));
+        }
+    }
+    private void glitchControls(LinearLayout panel){
+        GlitchFx.Layer layer=currentGlitchLayer();
+        glitchLabel(panel,"LIVE PARAMETER CONTROLS");
+        glitchSeek(panel,"Intensity",layer.intensity,v->layer.intensity=v);
+        glitchSeek(panel,"Scale",layer.scale,v->layer.scale=v);
+        glitchSeek(panel,"Threshold",layer.threshold,v->layer.threshold=v);
+        glitchSeek(panel,"Opacity",layer.opacity,v->layer.opacity=v);
+        LinearLayout line=row();
+        addFlexButton(line,"Direction: "+(layer.direction%2==0?"↔":"↕"),()->glitchChange(()->currentGlitchLayer().direction^=1),false);
+        addFlexButton(line,"Seed "+(state.glitch.seedLocked?"🔒":"🔓"),()->{
+            state.glitch.seedLocked=!state.glitch.seedLocked;showGlitchLab();
+        },false);
+        panel.addView(line);gap(panel,7);
+        LinearLayout seeds=row();
+        addFlexButton(seeds,"Seed: "+layer.seed,()->{
+            EditText field=new EditText(this);field.setSingleLine(true);
+            field.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);
+            field.setText(Long.toString(currentGlitchLayer().seed));field.selectAll();
+            new AlertDialog.Builder(this).setTitle("Deterministic random seed").setView(field)
+                .setNegativeButton("Cancel",null).setPositiveButton("Set",(d,w)->{
+                    try{
+                        long v=Long.parseLong(field.getText().toString());
+                        glitchChange(()->currentGlitchLayer().seed=v);
+                    }catch(Exception e){toast("Please enter a whole number");}
+                }).show();
+        },false);
+        addFlexButton(seeds,"⚡ RANDOMIZE",()->randomizeGlitches(),true);
+        panel.addView(seeds);
+        gap(panel,5);
+        panel.addView(text("Locked seeds reproduce the same image with the same settings. Unlock to generate a new seed when randomizing.",11,MUTED,false));
+    }
+    private void randomizeGlitches(){
+        glitchChange(()->{
+            java.util.Random rnd=new java.util.Random(System.nanoTime());
+            if(!state.glitch.seedLocked){
+                for(GlitchFx.Layer l:state.glitch.layers)l.seed=rnd.nextLong();
+            }
+            for(GlitchFx.Layer l:state.glitch.layers){
+                l.type=rnd.nextInt(GlitchFx.EFFECTS.length);
+                l.intensity=35+rnd.nextInt(66);
+                l.scale=15+rnd.nextInt(75);
+                l.threshold=rnd.nextInt(70);
+                l.direction=rnd.nextInt(2);
+            }
+        });
+    }
+    private void glitchMasks(LinearLayout panel){
+        glitchLabel(panel,"MASK WHERE THE EFFECT IS VISIBLE");
+        for(int i=0;i<GlitchFx.MASKS.length;i++){
+            final int ix=i;
+            Button b=actionButton((state.glitch.mask==i?"● ":"○ ")+GlitchFx.MASKS[i],
+                ()->glitchChange(()->state.glitch.mask=ix),state.glitch.mask==i);
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(42));
+            p.setMargins(0,dp(2),0,dp(3));panel.addView(b,p);
+        }
+        gap(panel,8);
+        panel.addView(text("Center and background masks are geometric ellipse selections, NOT AI subject segmentation. Brush masks let you select image areas directly.",11,MUTED,false));
+    }
+    private void glitchBrush(LinearLayout panel){
+        glitchLabel(panel,"PAINT THE GLITCH INTO SELECTED REGIONS");
+        LinearLayout actions=row();
+        addFlexButton(actions,glitchBrushMode?"✓ STOP PAINTING":"✎ START PAINTING",()->{
+            if(state.glitch.mask!=3){push();state.glitch.mask=3;}
+            glitchBrushMode=!glitchBrushMode;requestGlitchRender();showGlitchLab();
+        },true);
+        addFlexButton(actions,"ERASE BRUSH MASK",()->glitchChange(()->state.glitch.brush.clear()),false);
+        panel.addView(actions);
+        glitchSeek(panel,"Brush radius",state.glitch.brushRadius,v->state.glitch.brushRadius=Math.max(2,v));
+        panel.addView(text("After starting, drag a finger over the image. Only brushed areas receive glitch effects. Existing photo annotations remain separate.",11,MUTED,false));
+    }
+    private void glitchLayers(LinearLayout panel){
+        glitchLabel(panel,"NON-DESTRUCTIVE EFFECT STACK  •  MAX 6");
+        for(int i=0;i<state.glitch.layers.size();i++){
+            final int ix=i;
+            GlitchFx.Layer layer=state.glitch.layers.get(i);
+            Button b=actionButton((state.glitch.active==i?"● ":"○ ")+"L"+(i+1)+"  "+GlitchFx.EFFECTS[layer.type],
+                ()->{state.glitch.active=ix;showGlitchLab();},i==state.glitch.active);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(39));
+            lp.setMargins(0,dp(2),0,dp(3));panel.addView(b,lp);
+        }
+        LinearLayout btns=row();
+        addFlexButton(btns,"＋ ADD LAYER",()->{
+            if(state.glitch.layers.size()>=GlitchFx.MAX_LAYERS){toast("Maximum six effects");return;}
+            glitchChange(()->{
+                GlitchFx.Layer l=new GlitchFx.Layer();
+                l.type=(state.glitch.layers.size()+1)%GlitchFx.EFFECTS.length;
+                l.seed=2026+state.glitch.layers.size()*341;
+                state.glitch.layers.add(l);
+                state.glitch.active=state.glitch.layers.size()-1;
+            });
+        },true);
+        addFlexButton(btns,"− DELETE LAYER",()->{
+            if(state.glitch.layers.isEmpty())return;
+            glitchChange(()->{
+                state.glitch.layers.remove(state.glitch.active);
+                state.glitch.active=Math.max(0,Math.min(state.glitch.active,state.glitch.layers.size()-1));
+            });
+        },false);
+        panel.addView(btns);
+        gap(panel,10);
+        if(state.glitch.layers.size()>0){
+            GlitchFx.Layer layer=currentGlitchLayer();
+            LinearLayout blend=row();
+            addFlexButton(blend,"Blend: "+GlitchFx.BLENDS[layer.blend],()->glitchChange(()->{
+                currentGlitchLayer().blend=(currentGlitchLayer().blend+1)%GlitchFx.BLENDS.length;
+            }),false);
+            addFlexButton(blend,"CLEAR ALL",()->glitchChange(()->state.glitch.layers.clear()),false);
+            panel.addView(blend);
+            glitchSeek(panel,"Opacity",layer.opacity,v->layer.opacity=v);
+        }
+    }
+    private void glitchExportPanel(LinearLayout panel){
+        glitchLabel(panel,"RENDER FULL-SIZE IMAGE WITH GLITCH");
+        LinearLayout row1=row();
+        addFlexButton(row1,"↓ PNG",()->save(false,"png"),true);
+        addFlexButton(row1,"↓ JPG",()->save(false,"jpg"),false);
+        addFlexButton(row1,"↓ WebP",()->save(false,"webp"),false);
+        panel.addView(row1);gap(panel,8);
+        LinearLayout row2=row();
+        addFlexButton(row2,"↗ SHARE PNG",()->save(true,"png"),false);
+        addFlexButton(row2,glitchCompare?"VIEW EDITED":"COMPARE ORIGINAL",()->{
+            glitchCompare=!glitchCompare;if(preview!=null)preview.invalidate();showGlitchLab();
+        },false);
+        panel.addView(row2);
+        gap(panel,10);
+        panel.addView(text("PNG preserves existing transparency. JPG is lossy and flattens transparency. WebP lossless requires Android 11+. GIF/MP4 and AI subject cutouts are not enabled in this Android release.",11,MUTED,false));
+    }
+    private String encodeGlitch(){
+        try{
+            JSONObject root=new JSONObject();
+            root.put("mask",state.glitch.mask);root.put("brushRadius",state.glitch.brushRadius);
+            root.put("seedLocked",state.glitch.seedLocked);
+            JSONArray a=new JSONArray();
+            for(GlitchFx.Layer layer:state.glitch.layers){
+                JSONObject o=new JSONObject();
+                o.put("type",layer.type);o.put("intensity",layer.intensity);
+                o.put("scale",layer.scale);o.put("threshold",layer.threshold);
+                o.put("direction",layer.direction);o.put("opacity",layer.opacity);
+                o.put("blend",layer.blend);o.put("seed",layer.seed);
+                a.put(o);
+            }
+            root.put("layers",a);
+            JSONArray pts=new JSONArray();
+            for(GlitchFx.Point p:state.glitch.brush) {
+                JSONArray xy=new JSONArray();xy.put(p.x);xy.put(p.y);pts.put(xy);
+            }
+            root.put("brush",pts);
+            return root.toString();
+        }catch(Exception e){return "";}
+    }
+    private GlitchFx.Config decodeGlitch(String json)throws Exception{
+        JSONObject root=new JSONObject(json);
+        GlitchFx.Config c=new GlitchFx.Config();
+        c.mask=root.optInt("mask",0);
+        c.brushRadius=root.optInt("brushRadius",13);
+        c.seedLocked=root.optBoolean("seedLocked",true);
+        JSONArray layers=root.optJSONArray("layers");
+        if(layers!=null)for(int i=0;i<Math.min(GlitchFx.MAX_LAYERS,layers.length());i++){
+            JSONObject o=layers.getJSONObject(i);
+            GlitchFx.Layer l=new GlitchFx.Layer();
+            l.type=Math.max(0,Math.min(9,o.optInt("type",0)));
+            l.intensity=o.optInt("intensity",65);l.scale=o.optInt("scale",40);
+            l.threshold=o.optInt("threshold",95);l.direction=o.optInt("direction",0);
+            l.opacity=o.optInt("opacity",100);l.blend=o.optInt("blend",0);
+            l.seed=o.optLong("seed",2026);
+            c.layers.add(l);
+        }
+        JSONArray pts=root.optJSONArray("brush");
+        if(pts!=null)for(int i=0;i<Math.min(10000,pts.length());i++){
+            JSONArray p=pts.getJSONArray(i);
+            c.brush.add(new GlitchFx.Point((float)p.getDouble(0),(float)p.getDouble(1)));
+        }
+        return c;
+    }
+    private void saveCustomGlitchPreset(){
+        String json=encodeGlitch();
+        if(json.isEmpty()){toast("Could not save preset");return;}
+        getSharedPreferences("glitch_lab_presets",MODE_PRIVATE).edit().putString("user_config",json).apply();
+        toast("Glitch preset saved on this device");
+        showGlitchLab();
+    }
+    private void showGlitchLab(){
+        if(source==null){showHome();return;}
+        inGlitchLab=true;
+        requestGlitchRender();
+        LinearLayout root=column();root.setBackgroundColor(0xFF0A0B16);
+
+        LinearLayout titlebar=row();titlebar.setPadding(dp(12),dp(7),dp(12),dp(5));
+        Button back=actionButton("‹",()->{inGlitchLab=false;glitchBrushMode=false;showStudio();},false);
+        titlebar.addView(back,new LinearLayout.LayoutParams(dp(46),dp(46)));
+        LinearLayout textCol=column();textCol.setPadding(dp(12),0,0,0);
+        textCol.addView(kicker("BLENDCRAFT  /  EXPERIMENTAL STUDIO"));
+        textCol.addView(text("⚡ GLITCH LAB",23,0xFFD6B2FF,true));
+        titlebar.addView(textCol,new LinearLayout.LayoutParams(0,-2,1));
+        Button save=actionButton("SAVE ↗",()->save(false,"png"),true);
+        titlebar.addView(save,new LinearLayout.LayoutParams(dp(94),dp(46)));
+        root.addView(titlebar);
+
+        FrameLayout canvas=new FrameLayout(this);canvas.setBackgroundColor(0xFF101326);
+        preview=new Preview();
+        canvas.addView(preview,new FrameLayout.LayoutParams(-1,-1));
+        root.addView(canvas,new LinearLayout.LayoutParams(-1,0,1));
+
+        LinearLayout status=row();status.setPadding(dp(13),dp(5),dp(13),dp(5));
+        TextView info=text(glitchWorking?"◌  RENDERING EFFECTS…":glitchCompare?"◯  ORIGINAL COMPARISON":"●  GLITCH PREVIEW",10,CYAN,true);
+        status.addView(info,new LinearLayout.LayoutParams(0,dp(25),1));
+        status.addView(text(state.glitch.layers.size()+" ACTIVE LAYER(S)",10,MUTED,true));
+        root.addView(status);
+
+        LinearLayout surface=column();surface.setPadding(dp(10),dp(8),dp(10),dp(5));
+        surface.setBackground(outlined(0xFF161A31,0xFF444264,21));
+        glitchTabs(surface);
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(false);
+        scroll.setVerticalScrollBarEnabled(false);
+        LinearLayout panel=column();panel.setPadding(dp(4),dp(3),dp(4),dp(3));
+        scroll.addView(panel);
+        if(glitchTab==0)glitchEffects(panel);
+        else if(glitchTab==1)glitchPresets(panel);
+        else if(glitchTab==2)glitchControls(panel);
+        else if(glitchTab==3)glitchMasks(panel);
+        else if(glitchTab==4)glitchBrush(panel);
+        else if(glitchTab==5)glitchLayers(panel);
+        else glitchExportPanel(panel);
+        surface.addView(scroll,new LinearLayout.LayoutParams(-1,dp(233)));
+        root.addView(surface);
+
+        LinearLayout quick=row();quick.setPadding(dp(7),dp(7),dp(7),dp(8));
+        addFlexButton(quick,"↶ UNDO",()->undoAction(),false);
+        addFlexButton(quick,"↷ REDO",()->redoAction(),false);
+        addFlexButton(quick,glitchCompare?"EDITED":"BEFORE",()->{
+            glitchCompare=!glitchCompare;showGlitchLab();
+        },false);
+        addFlexButton(quick,"↓ EXPORT",()->save(false,"png"),true);
+        root.addView(quick);
+        applySafeArea(root);setContentView(root);
+    }
+
     private void showStudio() {
         inGlitchLab=false;glitchBrushMode=false;
         requestGlitchRender();
@@ -719,7 +1048,7 @@ public class MainActivity extends Activity {
     }
     private Bitmap glitchBitmapForRender(){
         Bitmap input=rotated();
-        if(glitchCompare || !state.glitch.enabled())return input;
+        if(!state.glitch.enabled() || (glitchCompare && !glitchExporting))return input;
         if(glitchSignature().equals(glitchCacheKey) && glitchCache!=null)return glitchCache;
         if(glitchExporting)return GlitchFx.render(input,state.glitch.copy());
         return input;
@@ -900,6 +1229,19 @@ public class MainActivity extends Activity {
             if(scaledW<=0 || scaledH<=0)return true;
             float x=Math.max(0,Math.min(1,(event.getX()-left)/scaledW));
             float y=Math.max(0,Math.min(1,(event.getY()-top)/scaledH));
+            if(inGlitchLab && glitchBrushMode) {
+                if(a==MotionEvent.ACTION_DOWN)push();
+                if(a==MotionEvent.ACTION_DOWN || a==MotionEvent.ACTION_MOVE) {
+                    if(state.glitch.brush.size()<10000)
+                        state.glitch.brush.add(new GlitchFx.Point(x,y));
+                    invalidate();
+                }
+                if(a==MotionEvent.ACTION_UP) {
+                    requestGlitchRender();
+                    invalidate();
+                }
+                return true;
+            }
             if(drawing){
                 if(a==MotionEvent.ACTION_DOWN){
                     push();activeStroke=new Stroke();activeStroke.color=INKS[inkIndex];
