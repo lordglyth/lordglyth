@@ -9,8 +9,8 @@ android {
         applicationId 'com.snoplay.blendcraft'
         minSdk 29
         targetSdk 36
-        versionCode 5
-        versionName '1.3.0'
+        versionCode 6
+        versionName '1.4.0'
     }
 
     // Keep Google Play checkout and SnoPlay checkout in distinct app editions.
