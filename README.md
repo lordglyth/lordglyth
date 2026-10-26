@@ -1,55 +1,60 @@
-# BlendCraft v1.4.0 — Glitch Lab
+# BlendCraft v1.5.0 — Expanded Glitch Lab + Shifting Runes Curse
 
-BlendCraft is SnoPlay's offline-first, native Android image editor (Java, Android SDK 36).
-**The Glitch Lab is integrated into the existing Home / Photo Lab / Screenshot Studio / Meme Studio workflow.** It does not launch a separate demo or replace other editing tools.
+Native Android image editor (Android 10+, compile/target SDK 36).
+The Glitch Lab is embedded in the existing Photo, Screenshot and Meme studios.
+Free users retain the fixed lower-right **BLENDCRAFT** watermark on previews, PNG/JPG/WebP exports and Android shares. No payment mechanism or premium entitlement is enabled.
 
-## Original tools retained
-- File import and Android Share-to-BlendCraft
-- Photo editing (rotate, crop, color tuning), meme captions and overlay text
-- Screenshot presentation frames
-- Canvas annotations, editor undo/redo, My Creations gallery
-- Unremovable **BlendCraft Free** watermark in the lower-right corner of exported images
-- Saving and sharing edited images through Android MediaStore (Pictures/BlendCraft)
-- Existing saved image exports are not migrated or deleted by this update.
+## 31 working glitch effects
 
-## Glitch Lab — functional in this build
-Ten actual, deterministic ARGB pixel processing algorithms in \`GlitchFx.java\`:
-1. Pixel Sort — true thresholded contiguous-window pixel sorting, horizontal/vertical and brightness/saturation/red/green/blue ranking
-2. RGB Split — displaced color channels and chromatic aberration
-3. Data Smear — seeded horizontal displacement strips
-4. VHS/CRT — scanlines, tracking offsets, flicker
-5. Signal Noise — independent seeded RGB grain
-6. Artifact Blocks — seeded tile displacement
-7. Wave Distortion — horizontal tear and vertical wobble
-8. Posterize — adjustable palette quantization
-9. Ghosting — shifted blended image echo
-10. Corrupt Streaks — seeded dragged pixel fragments
+The ten prior effects are preserved: Pixel Sort, RGB Split, Data Smear, VHS/CRT, Signal Noise, Artifact Blocks, Wave Distortion, Posterize, Ghosting, and Corrupt Streaks.
 
-UI: **Effects, Presets, Controls, Masks, Brush, Layers, Export**. Controls include intensity, scale, threshold, direction, opacity, channel sort order, manual numeric seed and seed lock. Eight included presets are Signal Loss, Data Melt, Broken Neon, VHS Haunting, Cyber Static, Pixel Collapse, Corrupt Dream and Darkness Corruption. One user-generated custom preset can be saved and recalled locally.
+21 new procedural CPU image-processing effects are integrated, with real pixel transformations and photo-based thumbnails:
+- **Glitch** — corrupted signal bands and sampled neon color streaks.
+- **PNG Corruption** — strip displacement and simulated channel/bitstream glitches (does not actually damage file headers).
+- **WebP Fracture** — pixel block quantization and palette damage (visual simulation).
+- **Paintbrush** — colored drag strokes derived from the photograph.
+- **Field** — local radial lens/bubble distortion.
+- **Hacker** — monochrome-green screen tint and vertical data interference.
+- **Triangle** — triangular strip offset tiles.
+- **Delaunay** — procedural triangle-based low-polygon approximation (not mathematical Delaunay triangulation).
+- **Drone** — edge emphasis and cold scan tint.
+- **Pixel** — mosaic pixel blocks.
+- **XOR** — genuine bitwise XOR channel corruption.
+- **Scanner** — shifting scan bars.
+- **Window** — offset vertical rectangular columns.
+- **Burn** — overexposed warm-toned channel distortion.
+- **Quake** — seeded row jitter.
+- **Warp** — nonlinear sine-wave displacement.
+- **3D** — red/blue stereo channel offsets.
+- **Zalgo** — green randomized trailing glyph-like streaks.
+- **Chromatic** — widened RGB color aberration.
+- **Datamosh** — deterministic block motion-corruption approximation.
+- **Shifting Runes Curse** — rendered pseudo-runic strokes with seeded positions, live shifting phase, user-adjustable speed, and a **real HSV color selection wheel**.
 
-There are up to six composited effect layers with Normal, Screen, Additive and Multiply blend modes. Mask choices: entire image, center ellipse, outside-center, and paintable brush regions; brush radius is adjustable. Center ellipse is a **geometric approximation, not automatic AI subject segmentation**. Undo/redo deep-copies the image-editing state and glitch configuration. Original-versus-edited comparison is available as a toggle.
+The original eight corruption presets remain, as do editable masks, custom preset storage, up to six effect layers, blend modes, seeded randomness, before/after comparison, undo/redo and adjustable intensity.
 
-The underlying imported source Bitmap remains unchanged. Previews are computed asynchronously on a worker thread and composited by Android's Canvas. The export path uses the same effect configuration and draws existing captions, annotations and mandatory free watermark **after** glitch processing.
+Effect selection uses a touch-friendly two-column grid of **thumbnails generated from the current imported photo and the actual effect algorithm**. Selecting Shifting Runes immediately opens Controls, where its interactive color wheel is displayed. The wheel adjusts rune hue and saturation, not merely a few preset swatches.
 
-## Export
-- PNG: lossless, preserves transparency if the imported image contains it.
-- JPG: lossy at quality 95, explicitly composited against white.
-- WebP: lossless on Android 11+, otherwise user is warned that it is lossy.
-- Export resolution follows the imported bitmap's dimensions / selected crop (screenshot presentation intentionally uses a square canvas). No silent downsampling occurs.
-- Images greater than **12 megapixels** are rejected at import with a visible explanation rather than quietly resized. This memory guard is for low-memory Android devices.
+## Memory and export
 
-## Not present (do not advertise as completed)
-- Animated/keyframed glitches; GIF/MP4 export; adjustable animation speed and frequency
-- AI subject segmentation or automatic background removal
-- Multi-branch project saving, multi-slot custom preset library or cloud sync
-- Desktop-browser/Web edition of Glitch Lab (the existing product is Android-native)
-- Verified purchase entitlement / working Premium checkout and watermark removal
-- Comprehensive on-device UI, memory-stress and MediaStore export instrumentation tests (still required before public release)
+- Preview image transformations use an explicit 1000-pixel preview copy to prevent rendering the entire photo on every slider adjustment. Static exports render at the source/crop resolution.
+- Bitmap import refuses images larger than 12 megapixels with an explanation, rather than silently reducing quality.
+- Static PNG and WebP can preserve incoming alpha. JPG flattens transparency and uses lossy quality 95.
+- All free exports retain the mandatory BlendCraft lower-right watermark, drawn after the glitch and caption layers.
+- Live rune shifting is an **animated preview of a still effect**, and saving a static image captures the current glyph arrangement.
 
-## Automated verification
-\`.github/workflows/build-apk.yml\` runs deterministic JVM tests using a minimal stand-in Android Bitmap to exercise all ten pixel operations, eight presets, both sorting directions, reproducible random seeds, brush masking, alpha retention, original integrity and undo/deep-copy behavior. GitHub Actions then compiles both Android variants and the Play release bundle (target SDK 36, version code 6).
+## Not yet implemented
 
-**Artifact signing:** The permanent private PKCS#12 signing key is **not** in this repository. Use the existing owner's stored keystore to sign production releases, and always increment \`versionCode\`. The Play edition is an AAB (\`com.snoplay.blendcraft\`), while the SnoPlay edition is an APK (\`com.snoplay.blendcraft.snoplay\`). Test APKs from GitHub Actions use ephemeral debug signing unless explicitly re-signed.
+The reference screenshots also contain **Animation** and **Video** tools. These are distinct export/workflow modes; this release does **not** yet encode GIF or MP4, and should not pretend to. The Glitch Lab is native Android; no desktop browser edition is included. There is no AI-based automatic subject segmentation.
 
-## Licensing
-Copyright © 2026 SnoPlay. All rights reserved.
+## Build, tests and signing
+
+GitHub Actions runs JVM pixel tests using Android Bitmap test stub. Tests cover all 31 effects, alpha retention, source non-destruction, seed reproduction, sorting directions, brush masks and shifting rune color/phase. It then builds test Android variants and the Google Play release **AAB**:
+- Google Play: package com.snoplay.blendcraft, versionCode **7**, targetSdk **36**.
+- SnoPlay direct: package com.snoplay.blendcraft.snoplay, versionCode **7**, targetSdk **36**.
+- Production SnoPlay APK and Play AAB must use the owner's **existing permanent signing certificate**; never generate a replacement and never commit its private key or password to GitHub.
+- Output formats: signed SnoPlay APK, signed Google Play AAB only after signing; GitHub CI test APKs use ephemeral debug signing.
+
+Automated algorithm and build verification is not a substitute for physical device and full Android UI testing. More rendering stress tests and accessible UI checks are needed before wider release.
+
+© 2026 SnoPlay — All rights reserved.
