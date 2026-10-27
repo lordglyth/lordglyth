@@ -988,14 +988,13 @@ public class MainActivity extends Activity {
     private void glitchExportPanel(LinearLayout panel){
         glitchLabel(panel,"RENDER FULL-SIZE IMAGE WITH GLITCH");
         LinearLayout row1=row();
-        addFlexButton(row1,"↓ PNG",()->showExportChoice(false),true);
+        addFlexButton(row1,"↓ PNG",()->save(false,"png"),true);
         addFlexButton(row1,"↓ GIF LOOP",()->exportAnimatedGif(false),true);
         panel.addView(row1);gap(panel,7);
         LinearLayout more=row();
         addFlexButton(more,"↓ JPG",()->save(false,"jpg"),false);
         addFlexButton(more,"↓ WebP",()->save(false,"webp"),false);
-        panel.addView(more);
-        panel.addView(row1);gap(panel,8);
+        panel.addView(more);gap(panel,8);
         LinearLayout row2=row();
         addFlexButton(row2,"↗ SHARE…",()->showExportChoice(true),false);
         addFlexButton(row2,glitchCompare?"VIEW EDITED":"COMPARE ORIGINAL",()->{
@@ -1835,6 +1834,113 @@ public class MainActivity extends Activity {
             }
         });
     }
+    /**
+     * Actual offline GIF89a encoder. Unlike exportBitmap(), this uses a
+     * frame-specific deep copy of editor state, preventing the looping animation
+     * from changing the currently painted project or ruler/zoom settings.
+     *
+     * GIF does not support full RGBA or millions of colors. Flatten onto white
+     * and quantize via square/gifencoder, retaining the free watermark in each
+     * independently composed frame.
+     */
+    private void exportAnimatedGif(boolean share){
+        if(source==null){toast("Import a photo first");return;}
+        final Bitmap rotatedInput=rotated();
+        final State projectSnapshot=state.copy();
+        final String exportMode=mode;
+        final int originalOutW=outputWidth(),originalOutH=outputHeight();
+        final float outScale=Math.min(1f,
+            GifAnimationPlan.MAX_EDGE/(float)Math.max(originalOutW,originalOutH));
+        final int gifWidth=Math.max(1,Math.round(originalOutW*outScale));
+        final int gifHeight=Math.max(1,Math.round(originalOutH*outScale));
+        final int frameCount=GifAnimationPlan.frameCount(projectSnapshot.glitch);
+        // Render glitch effects on a proportional copy of the *original source*.
+        // The exported canvas then makes the crop/frame decisions identically to PNG.
+        float srcScale=Math.min(1f,GifAnimationPlan.MAX_EDGE/
+            (float)Math.max(rotatedInput.getWidth(),rotatedInput.getHeight()));
+        final int inW=Math.max(1,Math.round(rotatedInput.getWidth()*srcScale));
+        final int inH=Math.max(1,Math.round(rotatedInput.getHeight()*srcScale));
+        toast(frameCount==1?"Exporting still GIF…":"Exporting "+frameCount+"-frame looping GIF…");
+        final ExecutorService queue=gifWorkers;
+        queue.submit(()->{
+            Uri uri=null;
+            Bitmap input=null;
+            try{
+                input=(inW==rotatedInput.getWidth() && inH==rotatedInput.getHeight())
+                    ?rotatedInput:Bitmap.createScaledBitmap(rotatedInput,inW,inH,true);
+                ContentValues values=new ContentValues();
+                values.put(MediaStore.Images.Media.DISPLAY_NAME,
+                    "BlendCraft_"+System.currentTimeMillis()+".gif");
+                values.put(MediaStore.Images.Media.MIME_TYPE,"image/gif");
+                values.put(MediaStore.Images.Media.RELATIVE_PATH,"Pictures/BlendCraft");
+                values.put(MediaStore.Images.Media.IS_PENDING,1);
+                uri=getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values);
+                if(uri==null)throw new java.io.IOException("Could not create GIF in Pictures");
+                try(OutputStream stream=getContentResolver().openOutputStream(uri)){
+                    if(stream==null)throw new java.io.IOException("Could not open GIF output");
+                    GifEncoder encoder=new GifEncoder(stream,gifWidth,gifHeight,0);
+                    ImageOptions options=new ImageOptions();
+                    options.setDelay(GifAnimationPlan.DELAY_MS,TimeUnit.MILLISECONDS);
+                    for(int frame=0;frame<frameCount;frame++){
+                        GlitchFx.Config frameConfig=GifAnimationPlan.atFrame(
+                            projectSnapshot.glitch,frame,frameCount);
+                        Bitmap affected=frameConfig.enabled()?
+                            GlitchFx.render(input,frameConfig):input;
+                        Bitmap composite=Bitmap.createBitmap(gifWidth,gifHeight,Bitmap.Config.ARGB_8888);
+                        Canvas canvas=new Canvas(composite);
+                        // This draws the screenshot frame, filters, captions, strokes and
+                        // mandatory Free watermark *on every GIF frame*.
+                        artworkWithBitmap(canvas,gifWidth,gifHeight,affected,projectSnapshot,exportMode);
+                        int[] argb=new int[gifWidth*gifHeight];
+                        composite.getPixels(argb,0,gifWidth,0,0,gifWidth,gifHeight);
+                        int[][] rgb=new int[gifHeight][gifWidth];
+                        for(int y=0;y<gifHeight;y++){
+                            int at=y*gifWidth;
+                            for(int x=0;x<gifWidth;x++){
+                                int p=argb[at+x],a=(p>>>24)&255;
+                                // Square GIF encoder doesn't support alpha; explicitly
+                                // composite translucent pixels on white.
+                                int r=(p>>>16)&255,g=(p>>>8)&255,b=p&255;
+                                r=(r*a+255*(255-a))/255;
+                                g=(g*a+255*(255-a))/255;
+                                b=(b*a+255*(255-a))/255;
+                                rgb[y][x]=0xff000000|(r<<16)|(g<<8)|b;
+                            }
+                        }
+                        encoder.addImage(rgb,options);
+                        composite.recycle();
+                        if(affected!=input)affected.recycle();
+                    }
+                    encoder.finishEncoding();
+                }
+                values.clear();values.put(MediaStore.Images.Media.IS_PENDING,0);
+                getContentResolver().update(uri,values,null,null);
+                final Uri finished=uri;
+                mainHandler.post(()->{
+                    addRecent(finished);
+                    if(share){
+                        Intent intent=new Intent(Intent.ACTION_SEND);
+                        intent.setType("image/gif");
+                        intent.putExtra(Intent.EXTRA_STREAM,finished);
+                        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        startActivity(Intent.createChooser(intent,"Share BlendCraft GIF"));
+                    }else{
+                        toast("GIF saved in Pictures/BlendCraft ("+frameCount+" frame"+
+                            (frameCount==1?"":"s")+")");
+                    }
+                });
+            }catch(Throwable err){
+                if(uri!=null)try{getContentResolver().delete(uri,null,null);}catch(Exception ignored){}
+                final String msg=err.getMessage()==null?err.getClass().getSimpleName():err.getMessage();
+                mainHandler.post(()->new AlertDialog.Builder(this).setTitle("GIF export failed")
+                    .setMessage(msg).setPositiveButton("OK",null).show());
+            }finally{
+                if(input!=null&&input!=rotatedInput&&!input.isRecycled())input.recycle();
+            }
+        });
+    }
+    private final ExecutorService gifWorkers=Executors.newSingleThreadExecutor();
+
     private void saveEncodedBitmap(Bitmap bitmap,boolean share,String ext,String mime,Bitmap.CompressFormat compression)throws Exception {
         ContentValues cv=new ContentValues();
         String filename="BlendCraft_"+System.currentTimeMillis()+"."+ext;
