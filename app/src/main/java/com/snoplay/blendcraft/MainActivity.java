@@ -1441,36 +1441,42 @@ public class MainActivity extends Activity {
         if(r>ratio){int newW=Math.round(h*ratio);return new Rect((w-newW)/2,0,(w+newW)/2,h);}
         int newH=Math.round(w/ratio);return new Rect(0,(h-newH)/2,w,(h+newH)/2);
     }
-    private Paint filteredPaint(){
+    private Paint filteredPaint(){return filteredPaint(state);}
+    private Paint filteredPaint(State frameState){
         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
-        ColorMatrix sat=new ColorMatrix();sat.setSaturation(state.saturation/100f);
+        ColorMatrix sat=new ColorMatrix();sat.setSaturation(frameState.saturation/100f);
         ColorMatrix levels=new ColorMatrix(new float[]{
-            state.contrast/100f,0,0,0,(1-state.contrast/100f)*128+state.brightness*1.3f,
-            0,state.contrast/100f,0,0,(1-state.contrast/100f)*128+state.brightness*1.3f,
-            0,0,state.contrast/100f,0,(1-state.contrast/100f)*128+state.brightness*1.3f,
+            frameState.contrast/100f,0,0,0,(1-frameState.contrast/100f)*128+frameState.brightness*1.3f,
+            0,frameState.contrast/100f,0,0,(1-frameState.contrast/100f)*128+frameState.brightness*1.3f,
+            0,0,frameState.contrast/100f,0,(1-frameState.contrast/100f)*128+frameState.brightness*1.3f,
             0,0,0,1,0});
         sat.postConcat(levels);p.setColorFilter(new ColorMatrixColorFilter(sat));return p;
     }
     private void drawBitmap(Canvas c,Bitmap bm,RectF dst, boolean crop){
+        drawBitmap(c,bm,dst,crop,state);
+    }
+    private void drawBitmap(Canvas c,Bitmap bm,RectF dst, boolean crop,State frameState){
         c.save();c.clipRect(dst);
-        if(crop)c.drawBitmap(bm,crop(bm,dst.width()/dst.height()),dst,filteredPaint());
+        if(crop)c.drawBitmap(bm,crop(bm,dst.width()/dst.height()),dst,filteredPaint(frameState));
         else {
             float scale=Math.min(dst.width()/bm.getWidth(),dst.height()/bm.getHeight());
             float w=bm.getWidth()*scale,h=bm.getHeight()*scale;
             RectF fitted=new RectF(dst.centerX()-w/2,dst.centerY()-h/2,dst.centerX()+w/2,dst.centerY()+h/2);
-            c.drawBitmap(bm,null,fitted,filteredPaint());
+            c.drawBitmap(bm,null,fitted,filteredPaint(frameState));
         }
         c.restore();
     }
     private void artwork(Canvas c,int w,int h) {
-        if("Screenshot".equals(mode))c.drawColor(BG);
+        artworkWithBitmap(c,w,h,glitchBitmapForRender(),state,mode);
+    }
+    private void artworkWithBitmap(Canvas c,int w,int h,Bitmap bm,State frameState,String frameMode) {
+        if("Screenshot".equals(frameMode))c.drawColor(BG);
         else c.drawColor(Color.TRANSPARENT,android.graphics.PorterDuff.Mode.CLEAR);
-        Bitmap bm=glitchBitmapForRender();
-        if("Screenshot".equals(mode)){
+        if("Screenshot".equals(frameMode)){
             int[][] gradients={
                 {0xFF7C55CF,0xFF33BDD2},{0xFFFF75B4,0xFFFFD0A1},
                 {0xFF102B56,0xFF54BFC2},{0xFF212136,0xFF8B76BD}};
-            int[] g=gradients[state.frame];
+            int[] g=gradients[frameState.frame];
             Paint gp=new Paint(3);
             gp.setShader(new LinearGradient(0,0,w,h,g[0],g[1],Shader.TileMode.CLAMP));
             c.drawRect(0,0,w,h,gp);gp.setShader(null);
@@ -1485,11 +1491,11 @@ public class MainActivity extends Activity {
             gp.clearShadowLayer();
             gp.setColor(Color.WHITE);
             c.drawRoundRect(new RectF(dst.left-outerPad,dst.top-outerPad,dst.right+outerPad,dst.bottom+outerPad),w*.02f,w*.02f,gp);
-            drawBitmap(c,bm,dst,false);
+            drawBitmap(c,bm,dst,false,frameState);
         }else{
-            RectF full=new RectF(0,0,w,h);drawBitmap(c,bm,full,true);
+            RectF full=new RectF(0,0,w,h);drawBitmap(c,bm,full,true,frameState);
         }
-        for(Stroke s:state.strokes) {
+        for(Stroke s:frameState.strokes) {
             if(s.coords.size()<4)continue;
             Paint line=new Paint(3);line.setStyle(Paint.Style.STROKE);line.setStrokeCap(Paint.Cap.ROUND);line.setStrokeJoin(Paint.Join.ROUND);
             line.setColor(s.color);line.setStrokeWidth(w*.009f);
@@ -1497,9 +1503,9 @@ public class MainActivity extends Activity {
             for(int j=2;j+1<s.coords.size();j+=2)path.lineTo(s.coords.get(j)*w,s.coords.get(j+1)*h);
             c.drawPath(path,line);
         }
-        drawLabel(c,state.top,w/2f,h*.1f,w*.085f,w*.92f,state.textColor,true);
-        drawLabel(c,state.bottom,w/2f,h*.93f,w*.085f,w*.92f,state.textColor,true);
-        drawLabel(c,state.extra,w/2f,h*.52f,w*.07f,w*.9f,state.textColor,false);
+        drawLabel(c,frameState.top,w/2f,h*.1f,w*.085f,w*.92f,frameState.textColor,true);
+        drawLabel(c,frameState.bottom,w/2f,h*.93f,w*.085f,w*.92f,frameState.textColor,true);
+        drawLabel(c,frameState.extra,w/2f,h*.52f,w*.07f,w*.9f,frameState.textColor,false);
         // Render free-version branding LAST in the central renderer:
         // previews, file exports, and shares all use this exact canvas.
         drawFreeBrandMark(c,w,h);
