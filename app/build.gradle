@@ -9,8 +9,8 @@ android {
         applicationId 'com.snoplay.blendcraft'
         minSdk 29
         targetSdk 36
-        versionCode 9
-        versionName '1.7.0'
+        versionCode 10
+        versionName '1.8.0'
     }
 
     // Keep Google Play checkout and SnoPlay checkout in distinct app editions.
@@ -72,6 +72,8 @@ android {
 // It will not start a transaction until a verified backend and in-app
 // product are configured, avoiding any paid-but-locked purchases.
 dependencies {
+    // Apache-2.0 pure-Java GIF89a encoder: no web API and no paid service.
+    implementation 'com.squareup:gifencoder:0.10.1'
     playImplementation 'com.android.billingclient:billing:9.1.0'
 }
 
