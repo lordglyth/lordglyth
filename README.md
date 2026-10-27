@@ -1,4 +1,4 @@
-# BlendCraft v1.7.0 — PAINTABLE Glitch Lab + Expanded Canvas
+# BlendCraft v1.8.0 — PAINTABLE Glitch Lab + Expanded Canvas
 
 This release corrects the earlier interaction mistake. Selecting one of the 31 glitch effects now **arms its paint brush**, it does not apply the effect to the whole image. The selected brush automatically opens a larger painting workspace with minimal controls.
 
@@ -25,10 +25,10 @@ The **Presets** tab also loads the chosen preset into a grouped paint brush, rat
 31 working image-glitch algorithms, rune shift with color wheel, preset effects, color/crop/text/meme editor, screenshot framing, history, layer blending, original-image comparison, custom preset saving, local My Creations, and the mandatory free-version bottom-right BlendCraft watermark.
 
 ## Not built
-Animated GIF and MP4 encoding, AI background subject masking, desktop browser support, and live paid-Premium entitlement verification are still not available.
+MP4 encoding, AI background subject masking, desktop browser support, and live paid-Premium entitlement verification are still not available.
 
 ## Android builds
-- Play bundle: package com.snoplay.blendcraft, Android API 36, versionCode **9**.
+- Play bundle: package com.snoplay.blendcraft, Android API 36, versionCode **10**.
 - SnoPlay APK: package com.snoplay.blendcraft.snoplay, Android API 36, versionCode **8**.
 - The owner's **existing** private PKCS#12 signing key must be reused for production packages. This key MUST NOT be committed to public GitHub.
 - Continuous integration tests effect selection as a no-op, per-layer painted masks, erasing, re-painting, undo/deep-copy behavior, original integrity, all 31 algorithms, runic shift and seeded reproducibility.
@@ -47,3 +47,18 @@ Copyright © 2026 SnoPlay. All rights reserved.
 - Original source remains untouched; full-size static exports use the stored per-effect masks and retain the mandatory free watermark.
 
 This build has automated Java pixel and coordinate tests and Android compiler checks. Touch behavior must also be confirmed on the physical phone.
+
+## v1.8.0: PNG / GIF Everywhere
+
+Photo Studio, Screenshot Studio, Meme Studio and Glitch Lab now share a **Save As** dialog supporting full-resolution PNG or true GIF89a (plus JPG and WebP). The Glitch Lab Export tab also has an explicit **GIF LOOP** action. Share uses the same format picker.
+
+- GIF animations contain up to **18 frames** with **140ms delay** (approximately **2.52 seconds**, looping continuously). A still image without active painted effects produces a valid single-frame GIF.
+- **Shifting Runes Curse** advances its procedural rune phase (speed-dependent); other active glitches vary their phase/scale/random seed deterministically across frames.
+- GIF output max dimension is **640 pixels** to cap memory and processing time on phones. PNG preserves the existing original-size output behavior.
+- This GIF encoder supports **256 colors with no transparency**. Transparent pixels are composited against white instead of silently discarded. The app warns about the size/quality difference in the Export panel.
+- Captions, drawn annotations, frames, blend adjustments, layered brushes and the **non-optional Free watermark** are drawn over every GIF frame using the same Canvas renderer as PNG.
+- GIF processing runs off the UI thread; failed exports clean up partially written Android MediaStore files.
+- GIF generation uses an offline pure-Java Apache 2.0 implementation, `com.squareup:gifencoder:0.10.1` (<https://github.com/square/gifencoder>), with no API key.
+- No MP4 video export, AI subject segmentation or working paid-entitlement validation yet.
+
+CI tests check GIF frame planning, seed/rune phase progression, immutable editing state and original image retention. Android compilation tests verify the actual GIF encoder can be referenced. On-device export/playback validation is still required.
