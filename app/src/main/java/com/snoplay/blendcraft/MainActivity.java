@@ -1,6 +1,9 @@
 package com.snoplay.blendcraft;
 
 import android.app.Activity;
+import com.squareup.gifencoder.GifEncoder;
+import com.squareup.gifencoder.ImageOptions;
+import java.util.concurrent.TimeUnit;
 import android.app.AlertDialog;
 import android.content.ContentValues;
 import android.content.Intent;
@@ -985,18 +988,22 @@ public class MainActivity extends Activity {
     private void glitchExportPanel(LinearLayout panel){
         glitchLabel(panel,"RENDER FULL-SIZE IMAGE WITH GLITCH");
         LinearLayout row1=row();
-        addFlexButton(row1,"↓ PNG",()->save(false,"png"),true);
-        addFlexButton(row1,"↓ JPG",()->save(false,"jpg"),false);
-        addFlexButton(row1,"↓ WebP",()->save(false,"webp"),false);
+        addFlexButton(row1,"↓ PNG",()->showExportChoice(false),true);
+        addFlexButton(row1,"↓ GIF LOOP",()->exportAnimatedGif(false),true);
+        panel.addView(row1);gap(panel,7);
+        LinearLayout more=row();
+        addFlexButton(more,"↓ JPG",()->save(false,"jpg"),false);
+        addFlexButton(more,"↓ WebP",()->save(false,"webp"),false);
+        panel.addView(more);
         panel.addView(row1);gap(panel,8);
         LinearLayout row2=row();
-        addFlexButton(row2,"↗ SHARE PNG",()->save(true,"png"),false);
+        addFlexButton(row2,"↗ SHARE…",()->showExportChoice(true),false);
         addFlexButton(row2,glitchCompare?"VIEW EDITED":"COMPARE ORIGINAL",()->{
             glitchCompare=!glitchCompare;if(preview!=null)preview.invalidate();showGlitchLab();
         },false);
         panel.addView(row2);
         gap(panel,10);
-        panel.addView(text("PNG preserves existing transparency. JPG is lossy and flattens transparency. WebP lossless requires Android 11+. GIF/MP4 and AI subject cutouts are not enabled in this Android release.",11,MUTED,false));
+        panel.addView(text("PNG preserves full resolution. Animated GIF loops moving glitches and Shifting Runes Curse at up to 640px; still images export as one-frame GIF. GIF is limited to 256 colors and does not preserve alpha in this encoder. JPG is lossy, WebP can be lossless; MP4 is not enabled.",11,MUTED,false));
     }
     private String encodeGlitch(){
         try{
@@ -1116,7 +1123,7 @@ public class MainActivity extends Activity {
             addFlexButton(topActions,"‹ STUDIO",()->{canvasExpanded=false;showGlitchLab();},false);
             addFlexButton(topActions,"LAYERS",()->{canvasExpanded=false;glitchTab=5;showGlitchLab();},false);
             addFlexButton(topActions,"FILL",()->fillCanvas(),false);
-            addFlexButton(topActions,"SAVE ↗",()->save(false,"png"),true);
+            addFlexButton(topActions,"SAVE ↗",()->showExportChoice(false),true);
             root.addView(topActions);
         }else{
             LinearLayout titlebar=row();
@@ -1132,7 +1139,7 @@ public class MainActivity extends Activity {
             Button big=actionButton("⤢ CANVAS",()->{canvasExpanded=true;showGlitchLab();},false);
             big.setTextSize(11);
             titlebar.addView(big,new LinearLayout.LayoutParams(dp(104),dp(42)));
-            Button save=actionButton("SAVE",()->save(false,"png"),true);
+            Button save=actionButton("SAVE",()->showExportChoice(false),true);
             LinearLayout.LayoutParams saveParams=new LinearLayout.LayoutParams(dp(74),dp(42));
             saveParams.setMargins(dp(5),0,0,0);titlebar.addView(save,saveParams);
             root.addView(titlebar);
@@ -1219,7 +1226,7 @@ public class MainActivity extends Activity {
         gap(heading,3);
         heading.addView(text(mode.equals("Meme")?"Meme Maker":mode.equals("Screenshot")?"Screen Studio":"Photo Lab",22,WHITE,true));
         head.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
-        Button save=actionButton("SAVE  ↗",()->save(false),true);
+        Button save=actionButton("SAVE  ↗",()->showExportChoice(false),true);
         head.addView(save,new LinearLayout.LayoutParams(dp(94),dp(46)));
         root.addView(head);
         LinearLayout switches=row();switches.setPadding(dp(12),dp(7),dp(12),dp(5));
@@ -1327,7 +1334,7 @@ public class MainActivity extends Activity {
         addFlexButton(controls,"＋ New image",()->pick(mode),false);
         root.addView(controls);
         LinearLayout actions=row();actions.setPadding(dp(10),dp(6),dp(10),dp(8));
-        Button export=actionButton("↓  EXPORT PNG",()->save(false),true);
+        Button export=actionButton("↓  EXPORT PNG",()->showExportChoice(false),true);
         actions.addView(export,new LinearLayout.LayoutParams(0,dp(51),1));
         Button share=actionButton("↗  SHARE",()->save(true),false);
         LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(0,dp(51),1);
@@ -1745,7 +1752,24 @@ public class MainActivity extends Activity {
         Bitmap result=Bitmap.createBitmap(outputWidth(),outputHeight(),Bitmap.Config.ARGB_8888);
         Canvas c=new Canvas(result);artwork(c,result.getWidth(),result.getHeight());return result;
     }
-    private void save(boolean share){save(share,"png");}
+    private void save(boolean share){showExportChoice(share);}
+    private void showExportChoice(boolean share){
+        String[] choices={
+            "PNG  •  full-resolution still",
+            "GIF  •  animated loop (up to 640px)",
+            "JPG  •  photographic still",
+            "WebP  •  still"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle(share?"Share as…":"Save as…")
+            .setItems(choices,(dialog,which)->{
+                if(which==0)save(share,"png");
+                else if(which==1)exportAnimatedGif(share);
+                else if(which==2)save(share,"jpg");
+                else save(share,"webp");
+            })
+            .setNegativeButton("Cancel",null).show();
+    }
     private void save(boolean share,String format){
         String ext=format.toLowerCase(Locale.ROOT);
         if(!ext.equals("png") && !ext.equals("jpg") && !ext.equals("webp"))ext="png";
