@@ -45,12 +45,13 @@ jobs:
           java -cp "$RUNNER_TEMP/glitch-tests" com.snoplay.blendcraft.GlitchFxTest
           java -cp "$RUNNER_TEMP/glitch-tests" com.snoplay.blendcraft.GlitchCoordinatesTest
           java -cp "$RUNNER_TEMP/glitch-tests" com.snoplay.blendcraft.GifAnimationPlanTest
-      - name: Assemble installable debug test editions only
-        run: gradle --no-daemon :app:assemblePlayDebug :app:assembleSnoplayDebug --stacktrace
+      - name: Assemble debug APKs and an unsigned Play release intermediate
+        run: gradle --no-daemon :app:assemblePlayDebug :app:assembleSnoplayDebug :app:bundlePlayRelease --stacktrace
       - name: Verify both test APKs exist
         run: |
           test -s app/build/outputs/apk/play/debug/app-play-debug.apk
           test -s app/build/outputs/apk/snoplay/debug/app-snoplay-debug.apk
+          test -s app/build/outputs/bundle/playRelease/app-play-release.aab
       - name: Publish test APKs
         uses: actions/upload-artifact@v4
         with:
@@ -60,3 +61,11 @@ jobs:
             app/build/outputs/apk/snoplay/debug/app-snoplay-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish unsigned intermediate bundle for OFF-RUNNER signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlendCraft-v1.9-Code11-UNSIGNED-INTERMEDIATE-DO-NOT-UPLOAD-TO-PLAY
+          path: app/build/outputs/bundle/playRelease/app-play-release.aab
+          if-no-files-found: error
+          retention-days: 1
