@@ -128,6 +128,7 @@ public class MainActivity extends Activity {
         int ratio = 0;
         int brightness = 0, contrast = 100, saturation = 100;
         int frame = 0, textColor = Color.WHITE;
+        int memeStyle = 0;
         String top = "", bottom = "", extra = "";
         ArrayList<Stroke> strokes = new ArrayList<>();
         GlitchFx.Config glitch=new GlitchFx.Config();
@@ -135,7 +136,7 @@ public class MainActivity extends Activity {
             State s = new State();
             s.rotation=rotation; s.ratio=ratio; s.brightness=brightness;
             s.contrast=contrast; s.saturation=saturation; s.frame=frame;
-            s.textColor=textColor; s.top=top; s.bottom=bottom;
+            s.textColor=textColor; s.top=top; s.bottom=bottom; s.memeStyle=memeStyle;
             s.extra=extra;s.glitch=glitch.copy();
             for(Stroke stroke:strokes) s.strokes.add(stroke.copy());
             return s;
@@ -319,7 +320,7 @@ public class MainActivity extends Activity {
         gap(body,9);
         body.addView(card("▧","Screen Studio","Showcase screenshots in style.",LAVENDER,()->pick("Screenshot")));
         gap(body,9);
-        body.addView(card("✎","Meme Maker","Instant captions and bold typography.",0xFFFFD58E,()->pick("Meme")));
+        body.addView(card("✎","Meme Forge","Reaction banners, comic captions and poster styles.",0xFFFFD58E,()->pick("Meme")));
         gap(body,9);
         body.addView(card("⚡","Glitch Lab","Ten live pixel effects, masks, brushes and layers.",LAVENDER,()->{
             if(source==null)pick("Photo");else showGlitchLab();
@@ -989,7 +990,7 @@ public class MainActivity extends Activity {
         glitchLabel(panel,"RENDER FULL-SIZE IMAGE WITH GLITCH");
         LinearLayout row1=row();
         addFlexButton(row1,"↓ PNG",()->save(false,"png"),true);
-        addFlexButton(row1,"↓ GIF LOOP",()->exportAnimatedGif(false),true);
+        addFlexButton(row1,"↓ GIF LOOP",()->promptExportName(false,"gif"),true);
         panel.addView(row1);gap(panel,7);
         LinearLayout more=row();
         addFlexButton(more,"↓ JPG",()->save(false,"jpg"),false);
@@ -1223,7 +1224,7 @@ public class MainActivity extends Activity {
         LinearLayout heading=column(); heading.setPadding(dp(12),0,0,0);
         heading.addView(kicker("BLENDCRAFT  /  STUDIO"));
         gap(heading,3);
-        heading.addView(text(mode.equals("Meme")?"Meme Maker":mode.equals("Screenshot")?"Screen Studio":"Photo Lab",22,WHITE,true));
+        heading.addView(text(mode.equals("Meme")?"Meme Forge":mode.equals("Screenshot")?"Screen Studio":"Photo Lab",22,WHITE,true));
         head.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
         Button save=actionButton("SAVE  ↗",()->showExportChoice(false),true);
         head.addView(save,new LinearLayout.LayoutParams(dp(94),dp(46)));
@@ -1258,6 +1259,31 @@ public class MainActivity extends Activity {
 
         LinearLayout inspect=column();inspect.setPadding(dp(12),dp(10),dp(12),dp(9));
         inspect.setBackground(outlined(0xFF181E36,0xFF353B5F,25));
+        if("Meme".equals(mode)){
+            inspect.addView(kicker("MEME FORGE  /  WRITE • STYLE • SHARE"));
+            gap(inspect,9);
+            LinearLayout compose=row();
+            addFlexButton(compose,"✎ WRITE MEME",()->captionDialog(),true);
+            addFlexButton(compose,"＋ REACTION TEXT",()->textPrompt("Reaction text or emoji",state.extra,v->{state.extra=v;}),false);
+            inspect.addView(compose);gap(inspect,10);
+            String[] styles={"CLASSIC","BANNER","COMIC","POSTER"};
+            LinearLayout presets=row();
+            for(int i=0;i<styles.length;i++){
+                final int style=i;
+                Button b=button(styles[i],()->{push();state.memeStyle=style;showStudio();});
+                b.setTextSize(10);b.setPadding(0,0,0,0);
+                b.setTextColor(state.memeStyle==i?BG:WHITE);
+                b.setBackground(state.memeStyle==i?box(0xFFFFD58E,11):outlined(0xFF252C48,0xFF495371,11));
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(41),1);
+                lp.setMargins(dp(2),0,dp(2),0);presets.addView(b,lp);
+            }
+            inspect.addView(presets);gap(inspect,8);
+            String topText=state.top.trim().isEmpty()?"(tap Write Meme to add text)":state.top;
+            String bottomText=state.bottom.trim().isEmpty()?"(no bottom caption)":state.bottom;
+            TextView summary=text("TOP: "+topText+"\nBOTTOM: "+bottomText,12,0xFFD8DFEF,false);
+            summary.setMaxLines(2);summary.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            inspect.addView(summary);
+        }else{
         LinearLayout tabs=row();
         String[] names={"✎  TEXT","◐  COLOR","▧  FRAME","✦  DRAW"};
         for(int i=0;i<names.length;i++){
@@ -1324,6 +1350,7 @@ public class MainActivity extends Activity {
             addFlexButton(drawControls,drawing?"✓ Stop drawing":"✎ Start drawing",()->{drawing=!drawing;showStudio();},true);
             addFlexButton(drawControls,"Clear marks",()->{push();state.strokes.clear();showStudio();},false);
             inspect.addView(drawControls);
+        }
         }
         root.addView(inspect);
 
@@ -1509,12 +1536,42 @@ public class MainActivity extends Activity {
             for(int j=2;j+1<s.coords.size();j+=2)path.lineTo(s.coords.get(j)*w,s.coords.get(j+1)*h);
             c.drawPath(path,line);
         }
-        drawLabel(c,frameState.top,w/2f,h*.1f,w*.085f,w*.92f,frameState.textColor,true);
-        drawLabel(c,frameState.bottom,w/2f,h*.93f,w*.085f,w*.92f,frameState.textColor,true);
+        if("Meme".equals(frameMode))drawMemeCaptions(c,frameState,w,h);
+        else {
+            drawLabel(c,frameState.top,w/2f,h*.1f,w*.085f,w*.92f,frameState.textColor,true);
+            drawLabel(c,frameState.bottom,w/2f,h*.93f,w*.085f,w*.92f,frameState.textColor,true);
+        }
         drawLabel(c,frameState.extra,w/2f,h*.52f,w*.07f,w*.9f,frameState.textColor,false);
         // Render free-version branding LAST in the central renderer:
         // previews, file exports, and shares all use this exact canvas.
         drawFreeBrandMark(c,w,h);
+    }
+    /** Distinct offline meme styles, still composited through the standard free-watermark renderer. */
+    private void drawMemeCaptions(Canvas c,State st,int w,int h){
+        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+        if(st.memeStyle==1){
+            p.setColor(0xDD141829);c.drawRect(0,0,w,h*.19f,p);c.drawRect(0,h*.81f,w,h,p);
+            p.setColor(0xFFFFD58E);c.drawRect(0,h*.19f-Math.max(3,w*.008f),w,h*.19f,p);
+            c.drawRect(0,h*.81f,w,h*.81f+Math.max(3,w*.008f),p);
+            drawLabel(c,st.top,w*.5f,h*.125f,w*.063f,w*.93f,Color.WHITE,true);
+            drawLabel(c,st.bottom,w*.5f,h*.915f,w*.063f,w*.93f,Color.WHITE,true);
+        }else if(st.memeStyle==2){
+            p.setColor(0xF5FFF6CD);c.drawRoundRect(w*.035f,h*.025f,w*.965f,h*.19f,w*.025f,w*.025f,p);
+            c.drawRoundRect(w*.035f,h*.81f,w*.965f,h*.97f,w*.025f,w*.025f,p);
+            p.setColor(0xFF171525);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(Math.max(2,w*.008f));
+            c.drawRoundRect(w*.035f,h*.025f,w*.965f,h*.19f,w*.025f,w*.025f,p);
+            c.drawRoundRect(w*.035f,h*.81f,w*.965f,h*.97f,w*.025f,w*.025f,p);
+            drawLabel(c,st.top,w*.5f,h*.126f,w*.07f,w*.85f,0xFF171525,false);
+            drawLabel(c,st.bottom,w*.5f,h*.92f,w*.07f,w*.85f,0xFF171525,false);
+        }else if(st.memeStyle==3){
+            p.setColor(0xF5090A13);c.drawRect(0,0,w,h*.095f,p);c.drawRect(0,h*.76f,w,h,p);
+            p.setColor(0xFFFFD58E);c.drawRect(w*.085f,h*.775f,w*.915f,h*.779f,p);
+            drawLabel(c,st.top,w*.5f,h*.068f,w*.043f,w*.88f,0xFFFFD58E,false);
+            drawLabel(c,st.bottom,w*.5f,h*.895f,w*.068f,w*.85f,Color.WHITE,false);
+        }else{
+            drawLabel(c,st.top,w*.5f,h*.10f,w*.085f,w*.92f,st.textColor,true);
+            drawLabel(c,st.bottom,w*.5f,h*.93f,w*.085f,w*.92f,st.textColor,true);
+        }
     }
     private void drawFreeBrandMark(Canvas canvas,int w,int h) {
         canvas.save();
@@ -1763,13 +1820,42 @@ public class MainActivity extends Activity {
             .setTitle(share?"Share as…":"Save as…")
             .setItems(choices,(dialog,which)->{
                 if(which==0)save(share,"png");
-                else if(which==1)exportAnimatedGif(share);
+                else if(which==1)promptExportName(share,"gif");
                 else if(which==2)save(share,"jpg");
                 else save(share,"webp");
             })
             .setNegativeButton("Cancel",null).show();
     }
-    private void save(boolean share,String format){
+    private String normalizeCreationTitle(String value){
+        String cleaned=value==null?"":value.trim().replaceAll("\\s+"," ");
+        if(cleaned.length()>70)cleaned=cleaned.substring(0,70).trim();
+        if(cleaned.isEmpty())cleaned="Untitled "+("Meme".equals(mode)?"Meme":"Creation");
+        return cleaned;
+    }
+    private String safeCreationFilename(String title,String ext){
+        String stem=title.replaceAll("[^a-zA-Z0-9 _-]","").trim().replaceAll("\\s+","_");
+        if(stem.length()>45)stem=stem.substring(0,45);
+        if(stem.isEmpty())stem="BlendCraft";
+        return stem+"_"+System.currentTimeMillis()+"."+ext;
+    }
+    private void promptExportName(boolean share,String format){
+        if(source==null){toast("Import an image first");return;}
+        EditText input=new EditText(this);
+        input.setSingleLine(true);input.setSelectAllOnFocus(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        input.setText("Meme".equals(mode)?"My Meme":"Screenshot".equals(mode)?"My Screenshot":"My Artwork");
+        input.setPadding(dp(18),dp(12),dp(18),dp(12));
+        new AlertDialog.Builder(this).setTitle(share?"Name your creation to share":"Name your creation")
+            .setMessage("You can rename this later in My Creations.").setView(input)
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton(share?"Share":"Save",(dialog,which)->{
+                String name=normalizeCreationTitle(input.getText().toString());
+                if("gif".equals(format))exportAnimatedGif(share,name);
+                else exportNamedStill(share,format,name);
+            }).show();
+    }
+    private void save(boolean share,String format){promptExportName(share,format);}
+    private void exportNamedStill(boolean share,String format,String title){
         String ext=format.toLowerCase(Locale.ROOT);
         if(!ext.equals("png") && !ext.equals("jpg") && !ext.equals("webp"))ext="png";
         final String finalExt=ext;
@@ -1782,11 +1868,11 @@ public class MainActivity extends Activity {
                 .setTitle("WebP export")
                 .setMessage("This Android version only supports lossy WebP. Choose PNG for lossless quality.")
                 .setNegativeButton("Cancel",null)
-                .setPositiveButton("Export WebP",(dialog,which)->doExport(share,finalExt,mime,compression))
+                .setPositiveButton("Export WebP",(dialog,which)->doExport(share,finalExt,mime,compression,title))
                 .show();
-        }else doExport(share,finalExt,mime,compression);
+        }else doExport(share,finalExt,mime,compression,title);
     }
-    private void doExport(boolean share,String ext,String mime,Bitmap.CompressFormat compression){
+    private void doExport(boolean share,String ext,String mime,Bitmap.CompressFormat compression,String title){
         toast("Rendering original-resolution image…");
         // Keep the UI responsive during expensive pixel sorting and high-res compression.
         final int width=outputWidth(),height=outputHeight();
@@ -1815,7 +1901,7 @@ public class MainActivity extends Activity {
                             glitchCache=glitchResult;
                             glitchCacheKey=glitchSignature();
                             Bitmap bitmap=exportBitmap();
-                            saveEncodedBitmap(bitmap,share,ext,mime,compression);
+                            saveEncodedBitmap(bitmap,share,ext,mime,compression,title);
                         }finally{
                             state=prevState;
                             glitchCompare=prevCompare;
@@ -1843,7 +1929,7 @@ public class MainActivity extends Activity {
      * and quantize via square/gifencoder, retaining the free watermark in each
      * independently composed frame.
      */
-    private void exportAnimatedGif(boolean share){
+    private void exportAnimatedGif(boolean share,String title){
         if(source==null){toast("Import a photo first");return;}
         final Bitmap rotatedInput=rotated();
         final State projectSnapshot=state.copy();
@@ -1870,7 +1956,7 @@ public class MainActivity extends Activity {
                     ?rotatedInput:Bitmap.createScaledBitmap(rotatedInput,inW,inH,true);
                 ContentValues values=new ContentValues();
                 values.put(MediaStore.Images.Media.DISPLAY_NAME,
-                    "BlendCraft_"+System.currentTimeMillis()+".gif");
+                    safeCreationFilename(title,"gif"));
                 values.put(MediaStore.Images.Media.MIME_TYPE,"image/gif");
                 values.put(MediaStore.Images.Media.RELATIVE_PATH,"Pictures/BlendCraft");
                 values.put(MediaStore.Images.Media.IS_PENDING,1);
@@ -1917,7 +2003,7 @@ public class MainActivity extends Activity {
                 getContentResolver().update(uri,values,null,null);
                 final Uri finished=uri;
                 mainHandler.post(()->{
-                    addRecent(finished);
+                    addRecent(finished,title,"image/gif");
                     if(share){
                         Intent intent=new Intent(Intent.ACTION_SEND);
                         intent.setType("image/gif");
@@ -1941,9 +2027,9 @@ public class MainActivity extends Activity {
     }
     private final ExecutorService gifWorkers=Executors.newSingleThreadExecutor();
 
-    private void saveEncodedBitmap(Bitmap bitmap,boolean share,String ext,String mime,Bitmap.CompressFormat compression)throws Exception {
+    private void saveEncodedBitmap(Bitmap bitmap,boolean share,String ext,String mime,Bitmap.CompressFormat compression,String title)throws Exception {
         ContentValues cv=new ContentValues();
-        String filename="BlendCraft_"+System.currentTimeMillis()+"."+ext;
+        String filename=safeCreationFilename(title,ext);
         cv.put(MediaStore.Images.Media.DISPLAY_NAME,filename);
         cv.put(MediaStore.Images.Media.MIME_TYPE,mime);
         cv.put(MediaStore.Images.Media.RELATIVE_PATH,"Pictures/BlendCraft");
@@ -1972,7 +2058,7 @@ public class MainActivity extends Activity {
         bitmap.recycle();
         cv.clear();cv.put(MediaStore.Images.Media.IS_PENDING,0);
         getContentResolver().update(uri,cv,null,null);
-        addRecent(uri);
+        addRecent(uri,title,mime);
         if(share){
             Intent intent=new Intent(Intent.ACTION_SEND);
             intent.setType(mime);intent.putExtra(Intent.EXTRA_STREAM,uri);
@@ -1980,17 +2066,69 @@ public class MainActivity extends Activity {
             startActivity(Intent.createChooser(intent,"Share BlendCraft creation"));
         }else toast("Saved "+ext.toUpperCase(Locale.ROOT)+" in Pictures/BlendCraft");
     }
-    private void addRecent(Uri uri) {
-        try {
-            SharedPreferences pref=getSharedPreferences("creations",MODE_PRIVATE);
-            JSONArray prior=new JSONArray(pref.getString("items","[]"));
-            JSONArray arr=new JSONArray();arr.put(uri.toString());
-            for(int i=0;i<prior.length() && i<39;i++){
-                String item=prior.optString(i);
-                if(!item.equals(uri.toString()))arr.put(item);
+    private String recentUri(Object item){
+        return item instanceof JSONObject?((JSONObject)item).optString("uri",""):String.valueOf(item);
+    }
+    private void addRecent(Uri uri,String title,String mime){
+        try{
+            SharedPreferences prefs=getSharedPreferences("creations",MODE_PRIVATE);
+            JSONArray previous=new JSONArray(prefs.getString("items","[]"));
+            JSONObject fresh=new JSONObject();
+            fresh.put("uri",uri.toString());fresh.put("name",normalizeCreationTitle(title));
+            fresh.put("mime",mime);fresh.put("savedAt",System.currentTimeMillis());
+            JSONArray next=new JSONArray();next.put(fresh);
+            for(int i=0;i<previous.length() && next.length()<40;i++){
+                Object original=previous.opt(i);
+                if(original!=null && !uri.toString().equals(recentUri(original)))next.put(original);
             }
-            pref.edit().putString("items",arr.toString()).apply();
-        }catch(Exception ignored){}
+            prefs.edit().putString("items",next.toString()).apply();
+        }catch(Exception ex){android.util.Log.e("BlendCraft","Unable to store creation title",ex);}
+    }
+    private void renameCreation(String targetUri,String previousName){
+        EditText input=new EditText(this);input.setSingleLine(true);
+        input.setText(previousName);input.setSelectAllOnFocus(true);
+        input.setPadding(dp(18),dp(12),dp(18),dp(12));
+        new AlertDialog.Builder(this).setTitle("Rename creation").setView(input)
+            .setNegativeButton("Cancel",null).setPositiveButton("Rename",(dialog,which)->{
+                String updatedName=normalizeCreationTitle(input.getText().toString());
+                try{
+                    SharedPreferences prefs=getSharedPreferences("creations",MODE_PRIVATE);
+                    JSONArray old=new JSONArray(prefs.getString("items","[]")),updated=new JSONArray();
+                    for(int i=0;i<old.length();i++){
+                        Object original=old.opt(i);
+                        if(targetUri.equals(recentUri(original))){
+                            JSONObject item=original instanceof JSONObject?(JSONObject)original:new JSONObject();
+                            item.put("uri",targetUri);item.put("name",updatedName);
+                            updated.put(item);
+                        }else updated.put(original);
+                    }
+                    prefs.edit().putString("items",updated.toString()).apply();
+                    showCreations();
+                }catch(Exception ex){toast("Couldn't rename this creation");}
+            }).show();
+    }
+    private void loadCreationThumbnail(ImageView image,Uri uri){
+        thumbnailWorkers.submit(()->{
+            Bitmap thumb=null;
+            try{
+                BitmapFactory.Options bounds=new BitmapFactory.Options();
+                bounds.inJustDecodeBounds=true;
+                try(InputStream stream=getContentResolver().openInputStream(uri)){
+                    BitmapFactory.decodeStream(stream,null,bounds);
+                }
+                if(bounds.outWidth>0 && bounds.outHeight>0){
+                    BitmapFactory.Options options=new BitmapFactory.Options();
+                    int sample=1;
+                    while(Math.max(bounds.outWidth/sample,bounds.outHeight/sample)>180)sample*=2;
+                    options.inSampleSize=sample;
+                    try(InputStream stream=getContentResolver().openInputStream(uri)){
+                        thumb=BitmapFactory.decodeStream(stream,null,options);
+                    }
+                }
+            }catch(Exception ignored){}
+            final Bitmap ready=thumb;
+            if(ready!=null)mainHandler.post(()->image.setImageBitmap(ready));
+        });
     }
     private void showCreations(){
         LinearLayout base=column();base.setBackgroundColor(BG);
@@ -2004,10 +2142,41 @@ public class MainActivity extends Activity {
             JSONArray arr=new JSONArray(getSharedPreferences("creations",MODE_PRIVATE).getString("items","[]"));
             if(arr.length()==0)body.addView(text("Nothing here yet. Make something!",15,WHITE,false));
             for(int j=0;j<arr.length();j++){
-                Uri uri=Uri.parse(arr.optString(j));
-                final int n=j+1;
-                LinearLayout tile=card("▧","Creation "+n,"Reopen a saved PNG",CYAN,()->loadImage(uri,"Photo"));
-                body.addView(tile);gap(body,8);
+                Object raw=arr.opt(j);
+                String uriText=recentUri(raw);
+                if(uriText.isEmpty() || "null".equals(uriText))continue;
+                Uri uri=Uri.parse(uriText);
+                JSONObject record=raw instanceof JSONObject?(JSONObject)raw:null;
+                String label=record==null?"Creation "+(j+1):record.optString("name","Creation "+(j+1));
+                if(label.trim().isEmpty())label="Creation "+(j+1);
+                String mime=record==null?getContentResolver().getType(uri):record.optString("mime","");
+                if(mime==null || mime.isEmpty())mime="image/*";
+                String format=mime.contains("gif")?"GIF":mime.contains("webp")?"WebP":
+                    mime.contains("jpeg")?"JPG":mime.contains("png")?"PNG":"Image";
+                long savedAt=record==null?0:record.optLong("savedAt",0);
+                String date=savedAt>0?android.text.format.DateFormat.format("MMM d, yyyy",savedAt).toString():"Earlier export";
+                final String fixedLabel=label, fixedUri=uriText;
+                LinearLayout tile=row();tile.setPadding(dp(11),dp(10),dp(11),dp(10));
+                tile.setBackground(outlined(0xFF1A2038,0xFF35415E,16));
+                ImageView thumbnail=new ImageView(this);
+                thumbnail.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                thumbnail.setBackground(box(0xFF303B60,12));
+                tile.addView(thumbnail,new LinearLayout.LayoutParams(dp(72),dp(72)));
+                loadCreationThumbnail(thumbnail,uri);
+                LinearLayout details=column();details.setPadding(dp(12),0,dp(8),0);
+                TextView name=text(label,16,WHITE,true);name.setMaxLines(2);
+                name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                details.addView(name);
+                details.addView(text(format+"  •  "+date,12,CYAN,false));
+                details.addView(text("Tap to reopen",11,MUTED,false));
+                tile.addView(details,new LinearLayout.LayoutParams(0,-2,1));
+                Button rename=button("✎",()->renameCreation(fixedUri,fixedLabel));
+                rename.setContentDescription("Rename "+label);
+                rename.setPadding(0,0,0,0);
+                tile.addView(rename,new LinearLayout.LayoutParams(dp(45),dp(45)));
+                tile.setOnClickListener(v->loadImage(uri,"Photo"));
+                tile.setOnLongClickListener(v->{renameCreation(fixedUri,fixedLabel);return true;});
+                body.addView(tile);gap(body,9);
             }
         }catch(Exception ignored){toast("Couldn't list your recent creations");}
         applySafeArea(base);

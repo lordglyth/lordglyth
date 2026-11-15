@@ -3,7 +3,7 @@ on:
   push:
     branches: [blendcraft-android]
   pull_request:
-    branches: [main]
+    branches: [main, blendcraft-android]
   workflow_dispatch:
 permissions:
   contents: read
@@ -45,22 +45,27 @@ jobs:
           java -cp "$RUNNER_TEMP/glitch-tests" com.snoplay.blendcraft.GlitchFxTest
           java -cp "$RUNNER_TEMP/glitch-tests" com.snoplay.blendcraft.GlitchCoordinatesTest
           java -cp "$RUNNER_TEMP/glitch-tests" com.snoplay.blendcraft.GifAnimationPlanTest
-      - name: Assemble free test editions
-        run: gradle --no-daemon :app:assemblePlayDebug :app:assembleSnoplayDebug :app:assembleSnoplayRelease :app:bundlePlayRelease --stacktrace
-      - name: Verify both APKs exist
+      - name: Assemble debug APKs and an unsigned Play release intermediate
+        run: gradle --no-daemon :app:assemblePlayDebug :app:assembleSnoplayDebug :app:bundlePlayRelease --stacktrace
+      - name: Verify both test APKs exist
         run: |
           test -s app/build/outputs/apk/play/debug/app-play-debug.apk
           test -s app/build/outputs/apk/snoplay/debug/app-snoplay-debug.apk
-          test -s app/build/outputs/apk/snoplay/release/app-snoplay-release-unsigned.apk
           test -s app/build/outputs/bundle/playRelease/app-play-release.aab
       - name: Publish test APKs
         uses: actions/upload-artifact@v4
         with:
-          name: BlendCraft-v1.8-PNG-GIF-API36-Builds
+          name: BlendCraft-v1.9-Code11-DEBUG-TEST-ONLY
           path: |
             app/build/outputs/apk/play/debug/app-play-debug.apk
             app/build/outputs/apk/snoplay/debug/app-snoplay-debug.apk
-            app/build/outputs/apk/snoplay/release/app-snoplay-release-unsigned.apk
-            app/build/outputs/bundle/playRelease/app-play-release.aab
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish unsigned intermediate bundle for OFF-RUNNER signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlendCraft-v1.9-Code11-UNSIGNED-INTERMEDIATE-DO-NOT-UPLOAD-TO-PLAY
+          path: app/build/outputs/bundle/playRelease/app-play-release.aab
+          if-no-files-found: error
+          retention-days: 1
