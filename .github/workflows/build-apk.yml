@@ -3,7 +3,7 @@ on:
   push:
     branches: [blendcraft-android]
   pull_request:
-    branches: [main]
+    branches: [main, blendcraft-android]
   workflow_dispatch:
 permissions:
   contents: read
