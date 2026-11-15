@@ -990,7 +990,7 @@ public class MainActivity extends Activity {
         glitchLabel(panel,"RENDER FULL-SIZE IMAGE WITH GLITCH");
         LinearLayout row1=row();
         addFlexButton(row1,"↓ PNG",()->save(false,"png"),true);
-        addFlexButton(row1,"↓ GIF LOOP",()->exportAnimatedGif(false),true);
+        addFlexButton(row1,"↓ GIF LOOP",()->promptExportName(false,"gif"),true);
         panel.addView(row1);gap(panel,7);
         LinearLayout more=row();
         addFlexButton(more,"↓ JPG",()->save(false,"jpg"),false);
