@@ -27,7 +27,7 @@ jobs:
           echo "$(dirname "$SDKMGR")" >> "$GITHUB_PATH"
           "$SDKMGR" --version
       - name: Install Android API
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
@@ -55,6 +55,12 @@ jobs:
           test -s app/build/outputs/bundle/playRelease/app-play-release.aab
           APK_SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$APK_SIGNER" verify --verbose app/build/outputs/apk/snoplay/release/app-snoplay-release.apk
+          # Android App Bundles require a valid JAR signature from the existing
+          # Play upload key; merely creating a nonempty AAB is not sufficient.
+          jarsigner -verify -verbose app/build/outputs/bundle/playRelease/app-play-release.aab |
+            tee "$RUNNER_TEMP/play-aab-signature.txt"
+          grep -Fq 'jar verified.' "$RUNNER_TEMP/play-aab-signature.txt" ||
+            { echo "Play AAB is unsigned or its signature could not be verified"; exit 1; }
       - name: Upload signed SnoPlay APK
         uses: actions/upload-artifact@v4
         with:
