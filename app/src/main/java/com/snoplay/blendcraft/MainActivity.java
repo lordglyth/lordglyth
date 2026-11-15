@@ -128,6 +128,7 @@ public class MainActivity extends Activity {
         int ratio = 0;
         int brightness = 0, contrast = 100, saturation = 100;
         int frame = 0, textColor = Color.WHITE;
+        int memeStyle = 0;
         String top = "", bottom = "", extra = "";
         ArrayList<Stroke> strokes = new ArrayList<>();
         GlitchFx.Config glitch=new GlitchFx.Config();
@@ -135,7 +136,7 @@ public class MainActivity extends Activity {
             State s = new State();
             s.rotation=rotation; s.ratio=ratio; s.brightness=brightness;
             s.contrast=contrast; s.saturation=saturation; s.frame=frame;
-            s.textColor=textColor; s.top=top; s.bottom=bottom;
+            s.textColor=textColor; s.top=top; s.bottom=bottom; s.memeStyle=memeStyle;
             s.extra=extra;s.glitch=glitch.copy();
             for(Stroke stroke:strokes) s.strokes.add(stroke.copy());
             return s;
@@ -319,7 +320,7 @@ public class MainActivity extends Activity {
         gap(body,9);
         body.addView(card("▧","Screen Studio","Showcase screenshots in style.",LAVENDER,()->pick("Screenshot")));
         gap(body,9);
-        body.addView(card("✎","Meme Maker","Instant captions and bold typography.",0xFFFFD58E,()->pick("Meme")));
+        body.addView(card("✎","Meme Forge","Reaction banners, comic captions and poster styles.",0xFFFFD58E,()->pick("Meme")));
         gap(body,9);
         body.addView(card("⚡","Glitch Lab","Ten live pixel effects, masks, brushes and layers.",LAVENDER,()->{
             if(source==null)pick("Photo");else showGlitchLab();
@@ -1223,7 +1224,7 @@ public class MainActivity extends Activity {
         LinearLayout heading=column(); heading.setPadding(dp(12),0,0,0);
         heading.addView(kicker("BLENDCRAFT  /  STUDIO"));
         gap(heading,3);
-        heading.addView(text(mode.equals("Meme")?"Meme Maker":mode.equals("Screenshot")?"Screen Studio":"Photo Lab",22,WHITE,true));
+        heading.addView(text(mode.equals("Meme")?"Meme Forge":mode.equals("Screenshot")?"Screen Studio":"Photo Lab",22,WHITE,true));
         head.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
         Button save=actionButton("SAVE  ↗",()->showExportChoice(false),true);
         head.addView(save,new LinearLayout.LayoutParams(dp(94),dp(46)));
@@ -1258,6 +1259,31 @@ public class MainActivity extends Activity {
 
         LinearLayout inspect=column();inspect.setPadding(dp(12),dp(10),dp(12),dp(9));
         inspect.setBackground(outlined(0xFF181E36,0xFF353B5F,25));
+        if("Meme".equals(mode)){
+            inspect.addView(kicker("MEME FORGE  /  WRITE • STYLE • SHARE"));
+            gap(inspect,9);
+            LinearLayout compose=row();
+            addFlexButton(compose,"✎ WRITE MEME",()->captionDialog(),true);
+            addFlexButton(compose,"＋ REACTION TEXT",()->textPrompt("Reaction text or emoji",state.extra,v->{state.extra=v;}),false);
+            inspect.addView(compose);gap(inspect,10);
+            String[] styles={"CLASSIC","BANNER","COMIC","POSTER"};
+            LinearLayout presets=row();
+            for(int i=0;i<styles.length;i++){
+                final int style=i;
+                Button b=button(styles[i],()->{push();state.memeStyle=style;showStudio();});
+                b.setTextSize(10);b.setPadding(0,0,0,0);
+                b.setTextColor(state.memeStyle==i?BG:WHITE);
+                b.setBackground(state.memeStyle==i?box(0xFFFFD58E,11):outlined(0xFF252C48,0xFF495371,11));
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(41),1);
+                lp.setMargins(dp(2),0,dp(2),0);presets.addView(b,lp);
+            }
+            inspect.addView(presets);gap(inspect,8);
+            String topText=state.top.trim().isEmpty()?"(tap Write Meme to add text)":state.top;
+            String bottomText=state.bottom.trim().isEmpty()?"(no bottom caption)":state.bottom;
+            TextView summary=text("TOP: "+topText+"\nBOTTOM: "+bottomText,12,0xFFD8DFEF,false);
+            summary.setMaxLines(2);summary.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            inspect.addView(summary);
+        }else{
         LinearLayout tabs=row();
         String[] names={"✎  TEXT","◐  COLOR","▧  FRAME","✦  DRAW"};
         for(int i=0;i<names.length;i++){
@@ -1324,6 +1350,7 @@ public class MainActivity extends Activity {
             addFlexButton(drawControls,drawing?"✓ Stop drawing":"✎ Start drawing",()->{drawing=!drawing;showStudio();},true);
             addFlexButton(drawControls,"Clear marks",()->{push();state.strokes.clear();showStudio();},false);
             inspect.addView(drawControls);
+        }
         }
         root.addView(inspect);
 
@@ -1509,12 +1536,42 @@ public class MainActivity extends Activity {
             for(int j=2;j+1<s.coords.size();j+=2)path.lineTo(s.coords.get(j)*w,s.coords.get(j+1)*h);
             c.drawPath(path,line);
         }
-        drawLabel(c,frameState.top,w/2f,h*.1f,w*.085f,w*.92f,frameState.textColor,true);
-        drawLabel(c,frameState.bottom,w/2f,h*.93f,w*.085f,w*.92f,frameState.textColor,true);
+        if("Meme".equals(frameMode))drawMemeCaptions(c,frameState,w,h);
+        else {
+            drawLabel(c,frameState.top,w/2f,h*.1f,w*.085f,w*.92f,frameState.textColor,true);
+            drawLabel(c,frameState.bottom,w/2f,h*.93f,w*.085f,w*.92f,frameState.textColor,true);
+        }
         drawLabel(c,frameState.extra,w/2f,h*.52f,w*.07f,w*.9f,frameState.textColor,false);
         // Render free-version branding LAST in the central renderer:
         // previews, file exports, and shares all use this exact canvas.
         drawFreeBrandMark(c,w,h);
+    }
+    /** Distinct offline meme styles, still composited through the standard free-watermark renderer. */
+    private void drawMemeCaptions(Canvas c,State st,int w,int h){
+        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+        if(st.memeStyle==1){
+            p.setColor(0xDD141829);c.drawRect(0,0,w,h*.19f,p);c.drawRect(0,h*.81f,w,h,p);
+            p.setColor(0xFFFFD58E);c.drawRect(0,h*.19f-Math.max(3,w*.008f),w,h*.19f,p);
+            c.drawRect(0,h*.81f,w,h*.81f+Math.max(3,w*.008f),p);
+            drawLabel(c,st.top,w*.5f,h*.125f,w*.063f,w*.93f,Color.WHITE,true);
+            drawLabel(c,st.bottom,w*.5f,h*.915f,w*.063f,w*.93f,Color.WHITE,true);
+        }else if(st.memeStyle==2){
+            p.setColor(0xF5FFF6CD);c.drawRoundRect(w*.035f,h*.025f,w*.965f,h*.19f,w*.025f,w*.025f,p);
+            c.drawRoundRect(w*.035f,h*.81f,w*.965f,h*.97f,w*.025f,w*.025f,p);
+            p.setColor(0xFF171525);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(Math.max(2,w*.008f));
+            c.drawRoundRect(w*.035f,h*.025f,w*.965f,h*.19f,w*.025f,w*.025f,p);
+            c.drawRoundRect(w*.035f,h*.81f,w*.965f,h*.97f,w*.025f,w*.025f,p);
+            drawLabel(c,st.top,w*.5f,h*.126f,w*.07f,w*.85f,0xFF171525,false);
+            drawLabel(c,st.bottom,w*.5f,h*.92f,w*.07f,w*.85f,0xFF171525,false);
+        }else if(st.memeStyle==3){
+            p.setColor(0xF5090A13);c.drawRect(0,0,w,h*.095f,p);c.drawRect(0,h*.76f,w,h,p);
+            p.setColor(0xFFFFD58E);c.drawRect(w*.085f,h*.775f,w*.915f,h*.779f,p);
+            drawLabel(c,st.top,w*.5f,h*.068f,w*.043f,w*.88f,0xFFFFD58E,false);
+            drawLabel(c,st.bottom,w*.5f,h*.895f,w*.068f,w*.85f,Color.WHITE,false);
+        }else{
+            drawLabel(c,st.top,w*.5f,h*.10f,w*.085f,w*.92f,st.textColor,true);
+            drawLabel(c,st.bottom,w*.5f,h*.93f,w*.085f,w*.92f,st.textColor,true);
+        }
     }
     private void drawFreeBrandMark(Canvas canvas,int w,int h) {
         canvas.save();
